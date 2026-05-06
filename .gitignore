@@ -2,24 +2,11 @@
 __pycache__/
 *.py[cod]
 *$py.class
-*.so
-.Python
+
+# Build / packaging
 build/
-develop-eggs/
 dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
 *.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
 
 # Testing
 .pytest_cache/
@@ -29,137 +16,28 @@ htmlcov/
 # IDE
 .vscode/
 .idea/
-*.swp
-*.swo
 
-# Debug/Test Images (don't push these)
+# Ignore all images by default
 *.png
 *.jpg
 *.jpeg
-#allow demo images in root
+
+# ✅ Allow ONLY demo images
 !cad.png
 !real.png
+
+# (Optional) allow README images folder
 !README_images/
+!README_images/*.png
+
+# Ignore debug/test images
 debug_*.png
 test_*.png
-quick_*.png
-rotation_test_*.png
-fine_tune_*.png
-scale_fix_*.png
-correct_scale_*.png
-BIGGER_*.png
-MUCH_BIGGER_*.png
-FIXED_*.png
-PERFECT_*.png
-SUCCESS_*.png
-OPTIMAL_*.png
-FINAL_*.png
 *_overlay.png
 *_aligned.png
 *_comparison.png
 *_result.png
 
-# Test/Debug Scripts (don't push these)
-debug_*.py
-test_*.py
-diagnose_*.py
-fine_tune_*.py
-fix_*.py
-make_it_*.py
-find_*.py
-check_*.py
-compare_*.py
-final_*.py
-apply_*.py
-FINAL_*.py
-*_debug.py
-*_test.py
-
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
-
-# Testing
-.pytest_cache/
-.coverage
-htmlcov/
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# Debug/Test Images (don't push these)
-*.png
-*.jpg
-*.jpeg
-#allow demo images in root
-!cad.png
-!real.png
-!README_images/
-debug_*.png
-test_*.png
-quick_*.png
-rotation_test_*.png
-fine_tune_*.png
-scale_fix_*.png
-correct_scale_*.png
-BIGGER_*.png
-MUCH_BIGGER_*.png
-FIXED_*.png
-PERFECT_*.png
-SUCCESS_*.png
-OPTIMAL_*.png
-FINAL_*.png
-*_overlay.png
-*_aligned.png
-*_comparison.png
-*_result.png
-
-# Test/Debug Scripts (don't push these)
-debug_*.py
-test_*.py
-diagnose_*.py
-fine_tune_*.py
-fix_*.py
-make_it_*.py
-find_*.py
-check_*.py
-compare_*.py
-final_*.py
-apply_*.py
-FINAL_*.py
-*_debug.py
-*_test.py
-
-# Original images (keep sample images in a separate folder)
-cad.png
-real.png
-
-# Temporary files
-*.tmp
-*.temp
-
-# Temporary files
+# Ignore temp files
 *.tmp
 *.temp
