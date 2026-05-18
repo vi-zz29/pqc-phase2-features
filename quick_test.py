@@ -126,13 +126,37 @@ def get_holes_for_view(circles: list[dict], view: str) -> list[dict]:
     return holes
 
 
+# ── Box part feature definitions ─────────────────────────────────────────────
+# Features are keyed by blueprint stem name.
+# Each feature is either:
+#   {"kind": "circle", "cx", "cy", "r", "label"}   -- circular hole
+#   {"kind": "rect",   "x1", "y1", "x2", "y2", "label"}  -- rectangular cutout
+BOX_FEATURES: dict[str, list[dict]] = {
+    "box_front": [
+        {"kind": "circle", "cx": 165.168750, "cy":  95.475000, "r": 3.048, "label": "#1 hole"},
+        {"kind": "circle", "cx": 165.168750, "cy": 127.225000, "r": 3.048, "label": "#2 hole"},
+        # #3 (cx=161.99, cy=74.84) is a circular boss/protrusion, not a hole — excluded
+        {"kind": "rect",
+         "x1": 133.291750, "y1": 92.173000,
+         "x2": 158.945750, "y2": 117.827000,
+         "label": "#3 rect cutout"},
+    ],
+    "box_rear": [
+        {"kind": "rect",
+         "x1": 138.054250, "y1": 92.173000,
+         "x2": 163.708250, "y2": 117.827000,
+         "label": "#1 rect cutout"},
+    ],
+}
+
+
 # ── Coordinate mapping ────────────────────────────────────────────────────────
 def compute_M_dxf2bp(blueprint_path: Path) -> tuple[np.ndarray, float]:
     """
     M_dxf2bp: DXF mm -> blueprint PNG pixels.
 
-    Finds the drawn content bounding box in the blueprint PNG and maps
-    the DXF geometry (center=DXF_CENTER, span=106mm) onto it.
+    For circular parts: center=(148.5,105), span=106mm (2*53mm outer radius).
+    For box parts: compute center and span directly from the blueprint content bbox.
 
     Returns (M, scale_px_per_mm).
     """
@@ -153,14 +177,30 @@ def compute_M_dxf2bp(blueprint_path: Path) -> tuple[np.ndarray, float]:
     bp_w  = cmax - cmin
     bp_h  = rmax - rmin
 
-    scale = min(bp_w, bp_h) / 106.0   # 106mm = 2 * 53mm outer radius
+    stem = blueprint_path.stem.lower()
+    if "box" in stem:
+        # Box parts: DXF geometry spans roughly x=[123.9,173.1] y=[64.8,145.2]
+        # Use the actual DXF extents for box parts
+        # box_front/rear share similar extents; use content bbox directly
+        # DXF center estimated from known geometry midpoint
+        dxf_cx = 148.5   # midpoint of x range [123.9, 173.1]
+        dxf_cy = 105.0   # midpoint of y range [64.8, 145.2]
+        dxf_span_x = 173.106 - 123.894   # ~49.2mm
+        dxf_span_y = 145.163 -  64.838   # ~80.3mm
+        # Scale so the larger DXF dimension fits the smaller blueprint dimension
+        scale = min(bp_w / dxf_span_x, bp_h / dxf_span_y)
+    else:
+        # Circular parts: outer radius = 53mm, full span = 106mm
+        dxf_cx = DXF_CENTER_CX
+        dxf_cy = DXF_CENTER_CY
+        scale  = min(bp_w, bp_h) / 106.0
 
-    #  px  = (dxf_x - DXF_CX) * scale + bp_cx
-    #  py  = (DXF_CY - dxf_y) * scale + bp_cy   (Y flipped)
+    #  px  = (dxf_x - dxf_cx) * scale + bp_cx
+    #  py  = (dxf_cy - dxf_y) * scale + bp_cy   (Y flipped)
     M = np.array([
-        [ scale,      0,  bp_cx - DXF_CENTER_CX * scale          ],
-        [     0, -scale,  bp_cy + DXF_CENTER_CY * scale          ],
-        [     0,      0,  1.0                                     ],
+        [ scale,      0,  bp_cx - dxf_cx * scale],
+        [     0, -scale,  bp_cy + dxf_cy * scale],
+        [     0,      0,  1.0                    ],
     ], dtype=np.float64)
     return M, scale
 
@@ -212,7 +252,7 @@ def compute_M_cad2edge(cad_edge_map: np.ndarray,
     return M
 
 
-# ── Hole verification ─────────────────────────────────────────────────────────
+# ── Hole & feature verification ──────────────────────────────────────────────
 def check_hole_in_image(real_gray: np.ndarray,
                         cx_px: int, cy_px: int, r_px: int,
                         search_margin: int = 6) -> tuple[bool, float]:
@@ -249,6 +289,133 @@ def check_hole_in_image(real_gray: np.ndarray,
     return (ratio > 1.20 or ratio < 0.80), ratio
 
 
+def check_rect_in_image(real_gray: np.ndarray,
+                        corners_px: list[tuple[int, int]],
+                        border_px: int = 8) -> tuple[bool, float]:
+    """
+    Check whether a rectangular cutout is present.
+    Maps the 4 DXF corners to image pixels, then compares:
+      - mean intensity inside the rectangle
+      - mean intensity of a border band around it
+    A cutout appears as a distinct region (darker or brighter than surroundings).
+    Returns (found, ratio).
+    """
+    h, w = real_gray.shape
+
+    xs = [c[0] for c in corners_px]
+    ys = [c[1] for c in corners_px]
+    x1, x2 = max(0, min(xs)), min(w - 1, max(xs))
+    y1, y2 = max(0, min(ys)), min(h - 1, max(ys))
+
+    if x2 <= x1 or y2 <= y1:
+        return False, 1.0
+
+    # Inner region (shrunk by a few px to avoid edge effects)
+    shrink = max(2, (x2 - x1) // 8)
+    ix1 = min(x1 + shrink, x2 - shrink)
+    ix2 = max(x1 + shrink, x2 - shrink)
+    iy1 = min(y1 + shrink, y2 - shrink)
+    iy2 = max(y1 + shrink, y2 - shrink)
+
+    if ix2 <= ix1 or iy2 <= iy1:
+        return False, 1.0
+
+    inner = real_gray[iy1:iy2, ix1:ix2]
+
+    # Border band around the rectangle
+    bx1 = max(0, x1 - border_px)
+    bx2 = min(w, x2 + border_px)
+    by1 = max(0, y1 - border_px)
+    by2 = min(h, y2 + border_px)
+
+    outer_region = real_gray[by1:by2, bx1:bx2].copy()
+    # Mask out the inner part so we only measure the border
+    rel_ix1 = ix1 - bx1; rel_ix2 = ix2 - bx1
+    rel_iy1 = iy1 - by1; rel_iy2 = iy2 - by1
+    outer_region[rel_iy1:rel_iy2, rel_ix1:rel_ix2] = 0
+    border_px_vals = outer_region[outer_region > 0]
+
+    if inner.size == 0 or border_px_vals.size == 0:
+        return False, 1.0
+
+    mean_inner  = float(inner.mean())
+    mean_border = float(border_px_vals.mean())
+
+    if mean_border < 1.0:
+        return False, 1.0
+
+    ratio = mean_inner / mean_border
+    return (ratio > 1.20 or ratio < 0.80), ratio
+
+
+def map_dxf_point(dxf_x: float, dxf_y: float,
+                  M_combined: np.ndarray) -> tuple[int, int]:
+    """Map a single DXF mm point through the full chain to image pixels."""
+    pt = np.array([dxf_x, dxf_y, 1.0], dtype=np.float64)
+    mapped = M_combined @ pt
+    if abs(mapped[2]) > 1e-9:
+        mapped /= mapped[2]
+    return int(round(mapped[0])), int(round(mapped[1]))
+
+
+def verify_box_features(real_gray: np.ndarray,
+                        features: list[dict],
+                        M_dxf2bp: np.ndarray,
+                        M_cad2edge: np.ndarray,
+                        M_align: np.ndarray,
+                        scale_px_per_mm: float) -> list[dict]:
+    """
+    Verify box part features (circles + rectangles) using the same
+    coordinate chain as circular hole verification.
+    """
+    M_combined  = M_align @ M_cad2edge @ M_dxf2bp
+    align_scale = math.sqrt(M_align[0, 0] ** 2 + M_align[1, 0] ** 2)
+    cad2edge_sc = math.sqrt(M_cad2edge[0, 0] ** 2 + M_cad2edge[1, 0] ** 2)
+    total_scale = scale_px_per_mm * cad2edge_sc * align_scale
+
+    results = []
+    for i, feat in enumerate(features, start=1):
+        if feat["kind"] == "circle":
+            cx_px, cy_px = map_dxf_point(feat["cx"], feat["cy"], M_combined)
+            r_px = max(3, int(round(feat["r"] * total_scale)))
+            found, ratio = check_hole_in_image(real_gray, cx_px, cy_px, r_px)
+            results.append({
+                "idx":    i,
+                "kind":   "circle",
+                "label":  feat["label"],
+                "cx_px":  cx_px,
+                "cy_px":  cy_px,
+                "r_px":   r_px,
+                "found":  found,
+                "ratio":  ratio,
+            })
+
+        elif feat["kind"] == "rect":
+            # Map all 4 corners
+            corners = [
+                map_dxf_point(feat["x1"], feat["y1"], M_combined),
+                map_dxf_point(feat["x2"], feat["y1"], M_combined),
+                map_dxf_point(feat["x2"], feat["y2"], M_combined),
+                map_dxf_point(feat["x1"], feat["y2"], M_combined),
+            ]
+            found, ratio = check_rect_in_image(real_gray, corners)
+            # Store bounding box of mapped corners for drawing
+            xs = [c[0] for c in corners]
+            ys = [c[1] for c in corners]
+            results.append({
+                "idx":    i,
+                "kind":   "rect",
+                "label":  feat["label"],
+                "corners": corners,
+                "x1_px":  min(xs), "y1_px": min(ys),
+                "x2_px":  max(xs), "y2_px": max(ys),
+                "found":  found,
+                "ratio":  ratio,
+            })
+
+    return results
+
+
 def verify_holes(real_gray: np.ndarray,
                  holes_dxf: list[dict],
                  M_dxf2bp: np.ndarray,
@@ -280,6 +447,7 @@ def verify_holes(real_gray: np.ndarray,
         found, ratio = check_hole_in_image(real_gray, cx_px, cy_px, r_px)
         results.append({
             "idx":            i,
+            "kind":           "circle",
             "cx_dxf":         hole["cx"],
             "cy_dxf":         hole["cy"],
             "r_dxf":          hole["r"],
@@ -292,41 +460,58 @@ def verify_holes(real_gray: np.ndarray,
     return results
 
 
-def draw_hole_verification(real_gray: np.ndarray,
-                           hole_results: list[dict],
-                           title: str) -> np.ndarray:
+def draw_feature_verification(real_gray: np.ndarray,
+                              results: list[dict],
+                              title: str) -> np.ndarray:
+    """Draw verification results for both circular holes and rectangular cutouts."""
     vis = cv2.cvtColor(real_gray, cv2.COLOR_GRAY2BGR)
     FOUND   = (0, 220, 80)
     MISSING = (0, 60, 255)
     WHITE   = (255, 255, 255)
 
-    for r in hole_results:
-        cx, cy = r["cx_px"], r["cy_px"]
-        rp     = r["r_px"]
-        color  = FOUND if r["found"] else MISSING
+    for r in results:
+        color = FOUND if r["found"] else MISSING
+        label = r.get("label") or f"#{r.get('idx', '?')}"
 
-        cv2.circle(vis, (cx, cy), rp,     color, 2, cv2.LINE_AA)
-        cv2.circle(vis, (cx, cy), rp + 5, color, 1, cv2.LINE_AA)
-        overlay = vis.copy()
-        cv2.circle(overlay, (cx, cy), rp, color, -1)
-        cv2.addWeighted(overlay, 0.25, vis, 0.75, 0, vis)
+        if r["kind"] == "circle":
+            cx, cy, rp = r["cx_px"], r["cy_px"], r["r_px"]
+            cv2.circle(vis, (cx, cy), rp,     color, 2, cv2.LINE_AA)
+            cv2.circle(vis, (cx, cy), rp + 5, color, 1, cv2.LINE_AA)
+            overlay = vis.copy()
+            cv2.circle(overlay, (cx, cy), rp, color, -1)
+            cv2.addWeighted(overlay, 0.25, vis, 0.75, 0, vis)
+            (tw, _), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.4, 1)
+            lx = max(2, min(vis.shape[1] - tw - 2, cx - tw // 2))
+            ly = max(12, min(vis.shape[0] - 2, cy - rp - 6))
+            cv2.putText(vis, label, (lx, ly), cv2.FONT_HERSHEY_SIMPLEX,
+                        0.4, WHITE, 1, cv2.LINE_AA)
 
-        label = f"#{r['idx']}"
-        font  = cv2.FONT_HERSHEY_SIMPLEX
-        fs, th = 0.4, 1
-        (tw, _), _ = cv2.getTextSize(label, font, fs, th)
-        lx = max(2, min(vis.shape[1] - tw - 2, cx - tw // 2))
-        ly = max(12, min(vis.shape[0] - 2, cy - rp - 6))
-        cv2.putText(vis, label, (lx, ly), font, fs, WHITE, th, cv2.LINE_AA)
+        elif r["kind"] == "rect":
+            p1 = (r["x1_px"], r["y1_px"])
+            p2 = (r["x2_px"], r["y2_px"])
+            overlay = vis.copy()
+            cv2.rectangle(overlay, p1, p2, color, -1)
+            cv2.addWeighted(overlay, 0.25, vis, 0.75, 0, vis)
+            cv2.rectangle(vis, p1, p2, color, 2, cv2.LINE_AA)
+            (tw, _), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.4, 1)
+            lx = max(2, p1[0])
+            ly = max(12, p1[1] - 6)
+            cv2.putText(vis, label, (lx, ly), cv2.FONT_HERSHEY_SIMPLEX,
+                        0.4, WHITE, 1, cv2.LINE_AA)
 
-    found_n   = sum(1 for r in hole_results if r["found"])
-    missing_n = len(hole_results) - found_n
+    found_n   = sum(1 for r in results if r["found"])
+    missing_n = len(results) - found_n
     cv2.putText(vis, title, (10, 24),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.65, WHITE, 2, cv2.LINE_AA)
     cv2.putText(vis, f"Found: {found_n}  Missing: {missing_n}", (10, 48),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.5,
                 FOUND if missing_n == 0 else MISSING, 1, cv2.LINE_AA)
     return vis
+
+
+# Keep old name as alias for circular-only results
+def draw_hole_verification(real_gray, hole_results, title):
+    return draw_feature_verification(real_gray, hole_results, title)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -467,52 +652,91 @@ def main():
         elif blueprint_path is None:
             print(f"\n   [SKIP] Hole check: no blueprint PNG for '{best_name}'")
         else:
-            print(f"\n   Hole verification  ({view} view, DXF: {dxf_path.name})")
+            print(f"\n   Feature verification  (DXF: {dxf_path.name})")
 
-            circles = parse_dxf_circles(dxf_path)
-            holes   = get_holes_for_view(circles, view)
-            print(f"   DXF holes loaded: {len(holes)}")
-
-            # Build the three matrices
+            # Build the three coordinate matrices
             M_dxf2bp,  scale_px_per_mm = compute_M_dxf2bp(blueprint_path)
             cad_edges_for_bp = preprocess_cad(blueprint_path)
             M_cad2edge = compute_M_cad2edge(cad_edges_for_bp, real_edges.shape)
             M_align    = best.result.transform_matrix
-
             print(f"   Scale: {scale_px_per_mm:.3f} px/mm (blueprint)")
 
-            hole_results = verify_holes(
-                real_gray=real,
-                holes_dxf=holes,
-                M_dxf2bp=M_dxf2bp,
-                M_cad2edge=M_cad2edge,
-                M_align=M_align,
-                scale_px_per_mm=scale_px_per_mm,
-            )
+            is_box = "box" in best_name.lower()
 
-            found_count   = sum(1 for r in hole_results if r["found"])
-            missing_count = len(hole_results) - found_count
+            if is_box:
+                # Box parts: use predefined feature list (circles + rectangles)
+                features = BOX_FEATURES.get(best_name, [])
+                if not features:
+                    print(f"   [SKIP] No feature definition for '{best_name}'")
+                else:
+                    print(f"   Features to verify: {len(features)}")
+                    feat_results = verify_box_features(
+                        real_gray=real,
+                        features=features,
+                        M_dxf2bp=M_dxf2bp,
+                        M_cad2edge=M_cad2edge,
+                        M_align=M_align,
+                        scale_px_per_mm=scale_px_per_mm,
+                    )
+                    found_count   = sum(1 for r in feat_results if r["found"])
+                    missing_count = len(feat_results) - found_count
+                    print(f"   Results: {found_count}/{len(feat_results)} features found")
+                    for r in feat_results:
+                        status = "[OK]  " if r["found"] else "[MISS]"
+                        if r["kind"] == "circle":
+                            print(f"     {status} {r['label']}  "
+                                  f"px=({r['cx_px']},{r['cy_px']})  "
+                                  f"r={r['r_px']}px  ratio={r['ratio']:.2f}")
+                        else:
+                            print(f"     {status} {r['label']}  "
+                                  f"px=({r['x1_px']},{r['y1_px']})-({r['x2_px']},{r['y2_px']})  "
+                                  f"ratio={r['ratio']:.2f}")
+                    vis = draw_feature_verification(
+                        real, feat_results,
+                        title=f"{inp.stem} -> {best_name} | {found_count}/{len(feat_results)} features"
+                    )
+                    cv2.imwrite(str(out_dir / "hole_verification.png"), vis)
+                    print(f"   [OK] hole_verification.png saved")
+                    if missing_count == 0:
+                        print(f"   [PASS] All {len(feat_results)} features present")
+                    else:
+                        missing = [r["label"] for r in feat_results if not r["found"]]
+                        print(f"   [WARN] Missing: {missing}")
 
-            print(f"   Results: {found_count}/{len(hole_results)} holes found")
-            for r in hole_results:
-                status = "[OK]  " if r["found"] else "[MISS]"
-                print(f"     {status} #{r['idx']:2d}  "
-                      f"dxf=({r['cx_dxf']:.1f},{r['cy_dxf']:.1f})  "
-                      f"px=({r['cx_px']},{r['cy_px']})  "
-                      f"r={r['r_px']}px  ratio={r['ratio']:.2f}")
-
-            vis = draw_hole_verification(
-                real, hole_results,
-                title=f"{inp.stem} -> {best_name} | holes {found_count}/{len(hole_results)}"
-            )
-            cv2.imwrite(str(out_dir / "hole_verification.png"), vis)
-            print(f"   [OK] hole_verification.png saved")
-
-            if missing_count == 0:
-                print(f"   [PASS] All {len(hole_results)} holes present")
             else:
-                missing = [r["idx"] for r in hole_results if not r["found"]]
-                print(f"   [WARN] Missing holes: {missing}")
+                # Circular parts: use DXF circle entities
+                circles = parse_dxf_circles(dxf_path)
+                holes   = get_holes_for_view(circles, view)
+                print(f"   DXF holes loaded: {len(holes)}")
+
+                hole_results = verify_holes(
+                    real_gray=real,
+                    holes_dxf=holes,
+                    M_dxf2bp=M_dxf2bp,
+                    M_cad2edge=M_cad2edge,
+                    M_align=M_align,
+                    scale_px_per_mm=scale_px_per_mm,
+                )
+                found_count   = sum(1 for r in hole_results if r["found"])
+                missing_count = len(hole_results) - found_count
+                print(f"   Results: {found_count}/{len(hole_results)} holes found")
+                for r in hole_results:
+                    status = "[OK]  " if r["found"] else "[MISS]"
+                    print(f"     {status} #{r['idx']:2d}  "
+                          f"dxf=({r['cx_dxf']:.1f},{r['cy_dxf']:.1f})  "
+                          f"px=({r['cx_px']},{r['cy_px']})  "
+                          f"r={r['r_px']}px  ratio={r['ratio']:.2f}")
+                vis = draw_hole_verification(
+                    real, hole_results,
+                    title=f"{inp.stem} -> {best_name} | holes {found_count}/{len(hole_results)}"
+                )
+                cv2.imwrite(str(out_dir / "hole_verification.png"), vis)
+                print(f"   [OK] hole_verification.png saved")
+                if missing_count == 0:
+                    print(f"   [PASS] All {len(hole_results)} holes present")
+                else:
+                    missing = [r["idx"] for r in hole_results if not r["found"]]
+                    print(f"   [WARN] Missing holes: {missing}")
 
     print(f"\n{'=' * 70}")
     print(f"[OK] Done!  All outputs saved under '{OUTPUTS_DIR.resolve()}'")
