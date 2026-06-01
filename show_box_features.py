@@ -1,9 +1,3 @@
-"""
-Shows the exact features we plan to verify for box parts:
-  box_front: 3 circular holes + 1 rectangular cutout
-  box_rear:  1 rectangular cutout
-Saves to outputs/box_inspection/ for confirmation before coding.
-"""
 import cv2, numpy as np
 from pathlib import Path
 
@@ -95,16 +89,10 @@ def rp(r, T):
 
 
 def render(circles, arcs, lines, features, title, out_path):
-    """
-    features: list of dicts with type 'circle' or 'rect'
-      circle: {type, cx, cy, r, label}
-      rect:   {type, x1, y1, x2, y2, label}
-    """
-    img = np.ones((SIZE, SIZE, 3), dtype=np.uint8) * 245  # light background
+    img = np.ones((SIZE, SIZE, 3), dtype=np.uint8) * 245
 
     T = make_T(circles, arcs, lines)
 
-    # Draw all geometry in dark grey
     for l in lines:
         cv2.line(img, px(l["x1"], l["y1"], T), px(l["x2"], l["y2"], T),
                  (80, 80, 80), 1, cv2.LINE_AA)
@@ -116,7 +104,6 @@ def render(circles, arcs, lines, features, title, out_path):
         cxp, cyp = px(c["cx"], c["cy"], T)
         cv2.circle(img, (cxp, cyp), rp(c["r"], T), (80, 80, 80), 1, cv2.LINE_AA)
 
-    # Highlight features
     CIRCLE_COLOR = (0, 160, 50)
     RECT_COLOR   = (200, 80, 0)
     LABEL_BG     = (30, 30, 30)
@@ -125,7 +112,6 @@ def render(circles, arcs, lines, features, title, out_path):
         if f["type"] == "circle":
             cxp, cyp = px(f["cx"], f["cy"], T)
             r = rp(f["r"], T)
-            # filled highlight
             overlay = img.copy()
             cv2.circle(overlay, (cxp, cyp), r, CIRCLE_COLOR, -1)
             cv2.addWeighted(overlay, 0.3, img, 0.7, 0, img)
@@ -142,7 +128,6 @@ def render(circles, arcs, lines, features, title, out_path):
         elif f["type"] == "rect":
             p1 = px(f["x1"], f["y1"], T)
             p2 = px(f["x2"], f["y2"], T)
-            # filled highlight
             overlay = img.copy()
             cv2.rectangle(overlay, p1, p2, RECT_COLOR, -1)
             cv2.addWeighted(overlay, 0.25, img, 0.75, 0, img)
@@ -164,15 +149,11 @@ def render(circles, arcs, lines, features, title, out_path):
     print(f"Saved: {out_path}")
 
 
-# ── BOX FRONT ─────────────────────────────────────────────────────────────────
 circles_f, arcs_f, lines_f = parse_dxf_all("dxf/box_front.dxf")
 
-# 3 circular holes — identified from arc pairs at same center with small radius
-# Using the outermost arc radius as the hole radius for each group
 front_features = [
     {"type": "circle", "cx": 165.168750, "cy":  95.475000, "r": 3.048, "label": "#1 hole"},
     {"type": "circle", "cx": 165.168750, "cy": 127.225000, "r": 3.048, "label": "#2 hole"},
-    # #3 (cx=161.99, cy=74.84) is a circular boss, not a hole — excluded
     {"type": "rect",
      "x1": 133.291750, "y1": 92.173000,
      "x2": 158.945750, "y2": 117.827000,
@@ -191,7 +172,6 @@ for f in front_features:
         print(f"  {f['label']}: rect ({f['x1']:.2f},{f['y1']:.2f}) -> ({f['x2']:.2f},{f['y2']:.2f})")
 
 
-# ── BOX REAR ──────────────────────────────────────────────────────────────────
 circles_r, arcs_r, lines_r = parse_dxf_all("dxf/box_rear.dxf")
 
 rear_features = [

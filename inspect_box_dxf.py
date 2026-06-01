@@ -1,4 +1,3 @@
-"""Inspect box DXF files to identify hole candidates."""
 import math, cv2, numpy as np
 from pathlib import Path
 
@@ -58,7 +57,6 @@ def parse_dxf_all(path):
 
 
 def render_dxf(circles, arcs, lines, title, out_path, highlight_arcs=None):
-    """Render DXF to image, optionally highlighting specific arcs."""
     SIZE = 900
     PAD  = 40
 
@@ -115,8 +113,6 @@ for name in ["box_front", "box_rear"]:
     circles, arcs, lines = parse_dxf_all(f"dxf/{name}.dxf")
     print(f"\n{name}: {len(circles)} circles, {len(arcs)} arcs, {len(lines)} lines")
 
-    # Group arcs by center position to find hole candidates
-    # (multiple arcs at same center = hole representation)
     from collections import defaultdict
     center_groups = defaultdict(list)
     for i, a in enumerate(arcs):
@@ -129,7 +125,6 @@ for name in ["box_front", "box_rear"]:
         radii = [a["r"] for _, a in group]
         span_deg = [(a["a1"] - a["a0"]) % 360 for _, a in group]
         print(f"    center=({cx},{cy})  radii={[round(r,3) for r in radii]}  spans={[round(s,1) for s in span_deg]}")
-        # Hole candidate: small radius (< 15mm) arcs
         if max(radii) < 15.0:
             for idx, _ in group:
                 hole_arc_indices.append(idx)

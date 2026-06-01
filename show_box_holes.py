@@ -1,9 +1,3 @@
-"""
-Renders the box DXF files and highlights ONLY the CIRCLE entities
-(which are the actual holes in engineering drawings).
-For box parts, holes are full circles — arcs are structural outlines.
-Saves to outputs/box_inspection/ for review before any code is written.
-"""
 import math, cv2, numpy as np
 from pathlib import Path
 from collections import defaultdict
@@ -104,7 +98,6 @@ def render(circles, arcs, lines, hole_circles, title, out_path):
     def px(x, y): return to_px(x, y, min_x, min_y, scale, cx_off, cy_off)
     def rp(r):    return r_px(r, scale)
 
-    # Draw structural geometry in white
     for l in lines:
         cv2.line(img, px(l["x1"], l["y1"]), px(l["x2"], l["y2"]),
                  (200, 200, 200), 1, cv2.LINE_AA)
@@ -116,12 +109,10 @@ def render(circles, arcs, lines, hole_circles, title, out_path):
         cx, cy = px(c["cx"], c["cy"])
         cv2.circle(img, (cx, cy), rp(c["r"]), (200, 200, 200), 1, cv2.LINE_AA)
 
-    # Highlight hole circles in green with number labels
     for i, h in enumerate(hole_circles, start=1):
         cx, cy = px(h["cx"], h["cy"])
         rr = rp(h["r"])
 
-        # Filled highlight
         overlay = img.copy()
         cv2.circle(overlay, (cx, cy), rr, (0, 255, 128), -1)
         cv2.addWeighted(overlay, 0.35, img, 0.65, 0, img)
@@ -143,7 +134,6 @@ def render(circles, arcs, lines, hole_circles, title, out_path):
     print(f"  Saved: {out_path}")
 
 
-# ── Process each box DXF ──────────────────────────────────────────────────────
 for name in ["box_front", "box_rear"]:
     circles, arcs, lines = parse_dxf_all(f"dxf/{name}.dxf")
     print(f"\n{name}:")
@@ -160,7 +150,6 @@ for name in ["box_front", "box_rear"]:
         print("  Holes in this part need to be identified from the input image or")
         print("  confirmed manually from the DXF arc geometry.")
 
-    # For now show ALL circles as candidate holes
     render(circles, arcs, lines, circles,
            f"{name} — CIRCLE entities (candidate holes)",
            OUT / f"{name}_candidate_holes.png")

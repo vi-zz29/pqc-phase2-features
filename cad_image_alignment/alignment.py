@@ -243,7 +243,6 @@ def _compute_coarse_transform(
     cad_edge_map: np.ndarray,
     real_edge_map: np.ndarray,
 ) -> Optional[np.ndarray]:
-    # ── Downsample both maps for the coarse search (4x fewer pixels → ~4x faster) ──
     COARSE_SCALE = 0.5
     h_full, w_full = real_edge_map.shape
     h_small = max(1, int(h_full * COARSE_SCALE))
@@ -280,22 +279,44 @@ def _compute_coarse_transform(
 
     scale_band = [0.90, 0.95, 1.00, 1.05, 1.10]
 
-    best_score, best_M = -1.0, np.eye(3, dtype=np.float64)
-
-    real_filled = _fill_silhouette(real_small)
-
-    # Wider coarse step (10°) — fine pass corrects the residual
-    coarse_step = 10
-    coarse_angles = list(range(0, 360, coarse_step))
     pca_diff = real_descriptor.pca_angle_deg - cad_descriptor.pca_angle_deg
-    coarse_angles = list(set(coarse_angles + [
-        round(pca_diff) % 360,
-        round(pca_diff + 180) % 360,
-    ]))
+    coarse_step = 10
+    coarse_angles = list(set(
+        list(range(0, 360, coarse_step)) + [
+            round(pca_diff) % 360,
+            round(pca_diff + 180) % 360,
+        ]
+    ))
 
-    EARLY_EXIT_SCORE = 0.88   # stop searching if we already have a great fit
+    EARLY_EXIT_SCORE = 0.88
 
+    GRID_SCALE = 0.5
+    h_grid = max(1, int(h_small * GRID_SCALE))
+    w_grid = max(1, int(w_small * GRID_SCALE))
+    cad_grid  = cv2.resize(cad_small,  (w_grid, h_grid), interpolation=cv2.INTER_AREA)
+    real_grid = cv2.resize(real_small, (w_grid, h_grid), interpolation=cv2.INTER_AREA)
+    _, cad_grid  = cv2.threshold(cad_grid,  20, 255, cv2.THRESH_BINARY)
+    _, real_grid = cv2.threshold(real_grid, 20, 255, cv2.THRESH_BINARY)
+
+    grid_desc_cad  = _extract_primary_contour(cad_grid)
+    grid_desc_real = _extract_primary_contour(real_grid)
+    if grid_desc_cad is None or grid_desc_real is None:
+        grid_desc_cad  = cad_descriptor
+        grid_desc_real = real_descriptor
+        cad_grid  = cad_small
+        real_grid = real_small
+
+    real_grid_f = real_grid.astype(np.bool_)
+
+    def _fast_iou(warped_bin: np.ndarray) -> float:
+        w_bool = warped_bin.astype(np.bool_)
+        inter = int(np.logical_and(w_bool, real_grid_f).sum())
+        union = int(np.logical_or(w_bool,  real_grid_f).sum())
+        return float(inter) / float(union) if union > 0 else 0.0
+
+    best_score_grid = -1.0
     best_angle_coarse, best_sf_coarse = coarse_angles[0], scale_band[0]
+    top_candidates: list[tuple[float, int, float]] = []
 
     outer_done = False
     for sf in scale_band:
@@ -306,22 +327,46 @@ def _compute_coarse_transform(
             M = _build_affine_matrix(
                 scale=s,
                 angle_deg=angle,
-                src_centroid=cad_descriptor.centroid,
-                dst_centroid=real_descriptor.centroid,
+                src_centroid=grid_desc_cad.centroid,
+                dst_centroid=grid_desc_real.centroid,
             )
-            warped = apply_transform(cad_small, M, output_shape=real_small.shape)
-            cad_filled = _fill_silhouette(warped)
-            intersection = np.logical_and(cad_filled > 0, real_filled > 0).sum()
-            union        = np.logical_or(cad_filled  > 0, real_filled > 0).sum()
-            score = float(intersection) / float(union) if union > 0 else 0.0
-            if score > best_score:
-                best_score, best_M = score, M
+            warped = apply_transform(cad_grid, M, output_shape=real_grid.shape)
+            score = _fast_iou(warped)
+            if score > best_score_grid:
+                best_score_grid = score
                 best_angle_coarse, best_sf_coarse = angle, sf
-            if best_score >= EARLY_EXIT_SCORE:
+            top_candidates.append((score, angle, sf))
+            if best_score_grid >= EARLY_EXIT_SCORE:
                 outer_done = True
                 break
 
-    # Fine angular refinement (±coarse_step around best, 1° steps)
+    top_candidates.sort(key=lambda x: x[0], reverse=True)
+    top_n = min(20, len(top_candidates))
+    top_angles = list(set(int(c[1]) for c in top_candidates[:top_n]))
+    top_sfs    = list(set(c[2]      for c in top_candidates[:top_n]))
+
+    real_grid_filled = _fill_silhouette(real_grid)
+    best_score_verify = -1.0
+    best_angle_coarse, best_sf_coarse = coarse_angles[0], scale_band[0]
+
+    for sf in top_sfs:
+        s = base_scale * sf
+        for angle in top_angles:
+            M = _build_affine_matrix(
+                scale=s,
+                angle_deg=angle,
+                src_centroid=grid_desc_cad.centroid,
+                dst_centroid=grid_desc_real.centroid,
+            )
+            warped = apply_transform(cad_grid, M, output_shape=real_grid.shape)
+            cad_filled = _fill_silhouette(warped)
+            intersection = np.logical_and(cad_filled > 0, real_grid_filled > 0).sum()
+            union        = np.logical_or(cad_filled  > 0, real_grid_filled > 0).sum()
+            score = float(intersection) / float(union) if union > 0 else 0.0
+            if score > best_score_verify:
+                best_score_verify = score
+                best_angle_coarse, best_sf_coarse = angle, sf
+
     fine_angles = list(range(best_angle_coarse - coarse_step,
                              best_angle_coarse + coarse_step + 1))
     fine_angles += list(range(int(pca_diff) - coarse_step,
@@ -330,9 +375,34 @@ def _compute_coarse_transform(
                               int(pca_diff + 180) + coarse_step + 1))
     fine_angles = list(set(fine_angles))
 
+    best_fine_angle, best_fine_sf = best_angle_coarse, best_sf_coarse
+    best_score_fine = -1.0
+
     for sf in [best_sf_coarse - 0.03, best_sf_coarse, best_sf_coarse + 0.03]:
         s = base_scale * sf
         for angle in fine_angles:
+            M = _build_affine_matrix(
+                scale=s,
+                angle_deg=angle,
+                src_centroid=grid_desc_cad.centroid,
+                dst_centroid=grid_desc_real.centroid,
+            )
+            warped = apply_transform(cad_grid, M, output_shape=real_grid.shape)
+            cad_filled = _fill_silhouette(warped)
+            intersection = np.logical_and(cad_filled > 0, real_grid_filled > 0).sum()
+            union        = np.logical_or(cad_filled  > 0, real_grid_filled > 0).sum()
+            score = float(intersection) / float(union) if union > 0 else 0.0
+            if score > best_score_fine:
+                best_score_fine = score
+                best_fine_angle, best_fine_sf = angle, sf
+
+    real_filled = _fill_silhouette(real_small)
+    best_M = np.eye(3, dtype=np.float64)
+    best_score = -1.0
+
+    for sf in [best_fine_sf - 0.03, best_fine_sf, best_fine_sf + 0.03]:
+        s = base_scale * sf
+        for angle in [best_fine_angle - 1, best_fine_angle, best_fine_angle + 1]:
             M = _build_affine_matrix(
                 scale=s,
                 angle_deg=angle,
@@ -349,9 +419,6 @@ def _compute_coarse_transform(
 
     logger.debug(f"Coarse best score={best_score:.4f}")
 
-    # ── Scale the matrix back up to full resolution ───────────────────────────
-    # The matrix was computed on the downsampled space; we need to map it back.
-    # S_up @ M_small @ S_down  where S = diag(1/COARSE_SCALE, 1/COARSE_SCALE, 1)
     S_down = np.array([[COARSE_SCALE, 0, 0],
                         [0, COARSE_SCALE, 0],
                         [0, 0,            1]], dtype=np.float64)
@@ -538,7 +605,6 @@ def align(
         output_shape=real_edge_map.shape
     )
 
-    # Compute filled silhouettes once and reuse for both score and coverage
     cad_filled  = _fill_silhouette(aligned_image)
     real_filled = _fill_silhouette(real_edge_map)
 

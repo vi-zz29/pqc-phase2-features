@@ -1,13 +1,3 @@
-"""
-quick_test.py  --  Batch alignment + hole verification
-
-Coordinate chain (preserves full DXF/blueprint integrity):
-  DXF mm
-    -> blueprint PNG px          (M_dxf2bp  : scale from content bbox)
-    -> resized edge-map px       (M_cad2edge: replicates _validate_inputs exactly)
-    -> real image px             (M_align   : from alignment pipeline)
-"""
-
 import math
 import cv2
 import numpy as np
@@ -15,7 +5,6 @@ from pathlib import Path
 from cad_image_alignment import align, match_best_template
 
 
-# ── Directories ───────────────────────────────────────────────────────────────
 INPUTS_DIR     = Path("inputs")
 BLUEPRINTS_DIR = Path("blueprints")
 DXF_DIR        = Path("dxf")
@@ -28,7 +17,6 @@ DXF_CENTER_CY  = 105.0
 DXF_CENTER_TOL = 2.0
 
 
-# ── Preprocessing ─────────────────────────────────────────────────────────────
 def preprocess_cad(path: Path) -> np.ndarray:
     img = cv2.imread(str(path), cv2.IMREAD_GRAYSCALE)
     if img is None:
@@ -59,7 +47,6 @@ def preprocess_real(img: np.ndarray) -> tuple:
     return real_edges, mask
 
 
-# ── DXF parsing ───────────────────────────────────────────────────────────────
 def parse_dxf_circles(path: Path) -> list[dict]:
     circles = []
     with open(str(path), "r") as f:
@@ -126,16 +113,10 @@ def get_holes_for_view(circles: list[dict], view: str) -> list[dict]:
     return holes
 
 
-# ── Box part feature definitions ─────────────────────────────────────────────
-# Features are keyed by blueprint stem name.
-# Each feature is either:
-#   {"kind": "circle", "cx", "cy", "r", "label"}   -- circular hole
-#   {"kind": "rect",   "x1", "y1", "x2", "y2", "label"}  -- rectangular cutout
 BOX_FEATURES: dict[str, list[dict]] = {
     "box_front": [
         {"kind": "circle", "cx": 165.168750, "cy":  95.475000, "r": 3.048, "label": "#1 hole"},
         {"kind": "circle", "cx": 165.168750, "cy": 127.225000, "r": 3.048, "label": "#2 hole"},
-        # #3 (cx=161.99, cy=74.84) is a circular boss/protrusion, not a hole — excluded
         {"kind": "rect",
          "x1": 133.291750, "y1": 92.173000,
          "x2": 158.945750, "y2": 117.827000,
@@ -150,16 +131,7 @@ BOX_FEATURES: dict[str, list[dict]] = {
 }
 
 
-# ── Coordinate mapping ────────────────────────────────────────────────────────
 def compute_M_dxf2bp(blueprint_path: Path) -> tuple[np.ndarray, float]:
-    """
-    M_dxf2bp: DXF mm -> blueprint PNG pixels.
-
-    For circular parts: center=(148.5,105), span=106mm (2*53mm outer radius).
-    For box parts: compute center and span directly from the blueprint content bbox.
-
-    Returns (M, scale_px_per_mm).
-    """
     img = cv2.imread(str(blueprint_path), cv2.IMREAD_GRAYSCALE)
     if img is None:
         raise FileNotFoundError(str(blueprint_path))
@@ -179,24 +151,16 @@ def compute_M_dxf2bp(blueprint_path: Path) -> tuple[np.ndarray, float]:
 
     stem = blueprint_path.stem.lower()
     if "box" in stem:
-        # Box parts: DXF geometry spans roughly x=[123.9,173.1] y=[64.8,145.2]
-        # Use the actual DXF extents for box parts
-        # box_front/rear share similar extents; use content bbox directly
-        # DXF center estimated from known geometry midpoint
-        dxf_cx = 148.5   # midpoint of x range [123.9, 173.1]
-        dxf_cy = 105.0   # midpoint of y range [64.8, 145.2]
-        dxf_span_x = 173.106 - 123.894   # ~49.2mm
-        dxf_span_y = 145.163 -  64.838   # ~80.3mm
-        # Scale so the larger DXF dimension fits the smaller blueprint dimension
+        dxf_cx = 148.5
+        dxf_cy = 105.0
+        dxf_span_x = 173.106 - 123.894
+        dxf_span_y = 145.163 -  64.838
         scale = min(bp_w / dxf_span_x, bp_h / dxf_span_y)
     else:
-        # Circular parts: outer radius = 53mm, full span = 106mm
         dxf_cx = DXF_CENTER_CX
         dxf_cy = DXF_CENTER_CY
         scale  = min(bp_w, bp_h) / 106.0
 
-    #  px  = (dxf_x - dxf_cx) * scale + bp_cx
-    #  py  = (dxf_cy - dxf_y) * scale + bp_cy   (Y flipped)
     M = np.array([
         [ scale,      0,  bp_cx - dxf_cx * scale],
         [     0, -scale,  bp_cy + dxf_cy * scale],
@@ -207,18 +171,6 @@ def compute_M_dxf2bp(blueprint_path: Path) -> tuple[np.ndarray, float]:
 
 def compute_M_cad2edge(cad_edge_map: np.ndarray,
                        real_shape: tuple[int, int]) -> np.ndarray:
-    """
-    M_cad2edge: blueprint PNG pixels -> resized edge-map pixels.
-
-    Replicates _validate_inputs from alignment.py exactly:
-      1. Find part bounding box in CAD edge map
-      2. Crop with 5% margin
-      3. Scale to fit real image
-      4. Center on canvas
-
-    This guarantees the DXF geometry goes through the identical transform
-    that the CAD image went through — no integrity loss.
-    """
     rh, rw = real_shape
     ch, cw = cad_edge_map.shape
 
@@ -243,7 +195,6 @@ def compute_M_cad2edge(cad_edge_map: np.ndarray,
     x_off = (rw - new_w) // 2
     y_off = (rh - new_h) // 2
 
-    #  edge_px = (bp_px - crop_origin) * fit_scale + canvas_offset
     M = np.array([
         [fit_scale, 0,          -x1 * fit_scale + x_off],
         [0,         fit_scale,  -y1 * fit_scale + y_off],
@@ -252,16 +203,9 @@ def compute_M_cad2edge(cad_edge_map: np.ndarray,
     return M
 
 
-# ── Hole & feature verification ──────────────────────────────────────────────
 def check_hole_in_image(real_gray: np.ndarray,
                         cx_px: int, cy_px: int, r_px: int,
                         search_margin: int = 6) -> tuple[bool, float]:
-    """
-    Check for a hole at (cx_px, cy_px) with radius r_px.
-    Samples mean intensity inside vs surrounding annulus.
-    Holes appear bright (light through) or dark (shadow).
-    Returns (found, ratio).  ratio > 1.20 or < 0.80 => hole.
-    """
     h, w = real_gray.shape
     if cx_px < 0 or cy_px < 0 or cx_px >= w or cy_px >= h:
         return False, 1.0
@@ -292,14 +236,6 @@ def check_hole_in_image(real_gray: np.ndarray,
 def check_rect_in_image(real_gray: np.ndarray,
                         corners_px: list[tuple[int, int]],
                         border_px: int = 8) -> tuple[bool, float]:
-    """
-    Check whether a rectangular cutout is present.
-    Maps the 4 DXF corners to image pixels, then compares:
-      - mean intensity inside the rectangle
-      - mean intensity of a border band around it
-    A cutout appears as a distinct region (darker or brighter than surroundings).
-    Returns (found, ratio).
-    """
     h, w = real_gray.shape
 
     xs = [c[0] for c in corners_px]
@@ -310,7 +246,6 @@ def check_rect_in_image(real_gray: np.ndarray,
     if x2 <= x1 or y2 <= y1:
         return False, 1.0
 
-    # Inner region (shrunk by a few px to avoid edge effects)
     shrink = max(2, (x2 - x1) // 8)
     ix1 = min(x1 + shrink, x2 - shrink)
     ix2 = max(x1 + shrink, x2 - shrink)
@@ -322,14 +257,12 @@ def check_rect_in_image(real_gray: np.ndarray,
 
     inner = real_gray[iy1:iy2, ix1:ix2]
 
-    # Border band around the rectangle
     bx1 = max(0, x1 - border_px)
     bx2 = min(w, x2 + border_px)
     by1 = max(0, y1 - border_px)
     by2 = min(h, y2 + border_px)
 
     outer_region = real_gray[by1:by2, bx1:bx2].copy()
-    # Mask out the inner part so we only measure the border
     rel_ix1 = ix1 - bx1; rel_ix2 = ix2 - bx1
     rel_iy1 = iy1 - by1; rel_iy2 = iy2 - by1
     outer_region[rel_iy1:rel_iy2, rel_ix1:rel_ix2] = 0
@@ -350,7 +283,6 @@ def check_rect_in_image(real_gray: np.ndarray,
 
 def map_dxf_point(dxf_x: float, dxf_y: float,
                   M_combined: np.ndarray) -> tuple[int, int]:
-    """Map a single DXF mm point through the full chain to image pixels."""
     pt = np.array([dxf_x, dxf_y, 1.0], dtype=np.float64)
     mapped = M_combined @ pt
     if abs(mapped[2]) > 1e-9:
@@ -364,10 +296,6 @@ def verify_box_features(real_gray: np.ndarray,
                         M_cad2edge: np.ndarray,
                         M_align: np.ndarray,
                         scale_px_per_mm: float) -> list[dict]:
-    """
-    Verify box part features (circles + rectangles) using the same
-    coordinate chain as circular hole verification.
-    """
     M_combined  = M_align @ M_cad2edge @ M_dxf2bp
     align_scale = math.sqrt(M_align[0, 0] ** 2 + M_align[1, 0] ** 2)
     cad2edge_sc = math.sqrt(M_cad2edge[0, 0] ** 2 + M_cad2edge[1, 0] ** 2)
@@ -391,7 +319,6 @@ def verify_box_features(real_gray: np.ndarray,
             })
 
         elif feat["kind"] == "rect":
-            # Map all 4 corners
             corners = [
                 map_dxf_point(feat["x1"], feat["y1"], M_combined),
                 map_dxf_point(feat["x2"], feat["y1"], M_combined),
@@ -399,7 +326,6 @@ def verify_box_features(real_gray: np.ndarray,
                 map_dxf_point(feat["x1"], feat["y2"], M_combined),
             ]
             found, ratio = check_rect_in_image(real_gray, corners)
-            # Store bounding box of mapped corners for drawing
             xs = [c[0] for c in corners]
             ys = [c[1] for c in corners]
             results.append({
@@ -422,13 +348,6 @@ def verify_holes(real_gray: np.ndarray,
                  M_cad2edge: np.ndarray,
                  M_align: np.ndarray,
                  scale_px_per_mm: float) -> list[dict]:
-    """
-    Full chain for each DXF hole (no approximations, no Hough):
-      DXF mm -> blueprint px -> edge-map px -> real image px
-
-    scale_px_per_mm is used only for the hole radius in pixels.
-    The alignment scale is extracted from M_align.
-    """
     M_combined  = M_align @ M_cad2edge @ M_dxf2bp
     align_scale = math.sqrt(M_align[0, 0] ** 2 + M_align[1, 0] ** 2)
     cad2edge_sc = math.sqrt(M_cad2edge[0, 0] ** 2 + M_cad2edge[1, 0] ** 2)
@@ -463,7 +382,6 @@ def verify_holes(real_gray: np.ndarray,
 def draw_feature_verification(real_gray: np.ndarray,
                               results: list[dict],
                               title: str) -> np.ndarray:
-    """Draw verification results for both circular holes and rectangular cutouts."""
     vis = cv2.cvtColor(real_gray, cv2.COLOR_GRAY2BGR)
     FOUND   = (0, 220, 80)
     MISSING = (0, 60, 255)
@@ -509,12 +427,10 @@ def draw_feature_verification(real_gray: np.ndarray,
     return vis
 
 
-# Keep old name as alias for circular-only results
 def draw_hole_verification(real_gray, hole_results, title):
     return draw_feature_verification(real_gray, hole_results, title)
 
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
 def collect_images(folder: Path) -> list[Path]:
     return sorted(p for p in folder.iterdir() if p.suffix.lower() in IMAGE_EXTS)
 
@@ -548,7 +464,6 @@ def save_outputs(out_dir: Path, blueprint_stem: str,
     return True
 
 
-# ── Main ──────────────────────────────────────────────────────────────────────
 def main():
     print("=" * 70)
     print("Quick Alignment Test  --  Batch Mode")
@@ -627,7 +542,6 @@ def main():
             tag = " <- best" if is_best else ""
             print(f"   [OK] {m.name}_aligned.png  |  {m.name}_overlay.png{tag}")
 
-        # ── Hole verification ─────────────────────────────────────────────────
         best_name  = best.name
         name_lower = best_name.lower()
         if "front" in name_lower or "top" in name_lower:
@@ -654,7 +568,6 @@ def main():
         else:
             print(f"\n   Feature verification  (DXF: {dxf_path.name})")
 
-            # Build the three coordinate matrices
             M_dxf2bp,  scale_px_per_mm = compute_M_dxf2bp(blueprint_path)
             cad_edges_for_bp = preprocess_cad(blueprint_path)
             M_cad2edge = compute_M_cad2edge(cad_edges_for_bp, real_edges.shape)
@@ -664,7 +577,6 @@ def main():
             is_box = "box" in best_name.lower()
 
             if is_box:
-                # Box parts: use predefined feature list (circles + rectangles)
                 features = BOX_FEATURES.get(best_name, [])
                 if not features:
                     print(f"   [SKIP] No feature definition for '{best_name}'")
@@ -704,7 +616,6 @@ def main():
                         print(f"   [WARN] Missing: {missing}")
 
             else:
-                # Circular parts: use DXF circle entities
                 circles = parse_dxf_circles(dxf_path)
                 holes   = get_holes_for_view(circles, view)
                 print(f"   DXF holes loaded: {len(holes)}")

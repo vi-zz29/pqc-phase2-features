@@ -1,26 +1,17 @@
-"""
-Renders circular_front.dxf and circular_rear.dxf, highlights every hole,
-and saves the images to outputs/hole_visualization/.
-"""
-
 import math
 import cv2
 import numpy as np
 from pathlib import Path
 
-# ── Output folder ─────────────────────────────────────────────────────────────
 OUT_DIR = Path("outputs/hole_visualization")
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
-# ── DXF parser (no external library needed) ───────────────────────────────────
 def parse_dxf(path: str):
-    """Return lists of circles, arcs, and lines from a DXF ENTITIES section."""
     circles, arcs, lines = [], [], []
 
     with open(path, "r") as f:
         raw = f.readlines()
 
-    # Build (group_code, value) pairs
     pairs = []
     i = 0
     while i + 1 < len(raw):
@@ -32,7 +23,6 @@ def parse_dxf(path: str):
             pass
         i += 2
 
-    # Find ENTITIES section boundaries
     ent_start = ent_end = None
     for idx, (code, val) in enumerate(pairs):
         if code == 2 and val == "ENTITIES":
@@ -46,8 +36,6 @@ def parse_dxf(path: str):
 
     entity_pairs = pairs[ent_start:ent_end]
 
-    # Split into individual entity blocks
-    # Each block starts with (0, entity_type)
     blocks = []
     current = None
     for code, val in entity_pairs:
@@ -56,9 +44,7 @@ def parse_dxf(path: str):
                 blocks.append(current)
             current = {"type": val, "data": {}}
         elif current is not None:
-            # Store last value for each code (handles repeated codes like 10/20/11/21)
             current["data"][code] = val
-            # For LINE we need both endpoints: store as lists for codes 10,20,11,21
             if code in (10, 20, 11, 21, 30, 31):
                 current["data"].setdefault(f"_{code}_list", []).append(val)
 
@@ -96,8 +82,6 @@ def parse_dxf(path: str):
                              "a_start": a_start, "a_end": a_end})
 
         elif t == "LINE":
-            # group 10/20 = start, 11/21 = end
-            # They may appear as repeated codes; use the _list approach
             xs = d.get("_10_list", [])
             ys = d.get("_20_list", [])
             x2s = d.get("_11_list", [])
@@ -112,30 +96,21 @@ def parse_dxf(path: str):
     return circles, arcs, lines
 
 
-# ── Decide which circles are "holes" ─────────────────────────────────────────
 def classify_holes_front(circles, max_hole_radius=10.0,
                          center_cx=148.5, center_cy=105.0, center_tol=2.0):
-    """
-    Front view rules:
-    - Exclude r=2.0 at (152.16, 63.16)  — duplicate/inner feature, not a real hole
-    - Include center circle r=14.5 as the last hole (#19)
-    - Everything else at center is a structural ring
-    """
     holes, rings = [], []
     center_hole = None
 
     for c in circles:
         dist = math.hypot(c["cx"] - center_cx, c["cy"] - center_cy)
 
-        # Center circles
         if dist < center_tol:
             if abs(c["r"] - 14.5) < 0.1:
-                center_hole = c          # will be appended last as #19
+                center_hole = c
             else:
                 rings.append(c)
             continue
 
-        # Skip the r=2.0 duplicate at bottom (cx≈152.16, cy≈63.16)
         if abs(c["cx"] - 152.16) < 0.5 and abs(c["cy"] - 63.16) < 0.5:
             rings.append(c)
             continue
@@ -146,34 +121,26 @@ def classify_holes_front(circles, max_hole_radius=10.0,
             rings.append(c)
 
     if center_hole is not None:
-        holes.append(center_hole)   # becomes #19
+        holes.append(center_hole)
 
     return holes, rings
 
 
 def classify_holes_rear(circles, max_hole_radius=10.0,
                         center_cx=148.5, center_cy=105.0, center_tol=2.0):
-    """
-    Rear view rules:
-    - Exclude r=2.0 at (152.16, 146.84) — it sits inside hole #1 (r=3.25), not separate
-    - Include center circle r=14.5 as hole #5
-    - Everything else at center is a structural ring
-    """
     holes, rings = [], []
     center_hole = None
 
     for c in circles:
         dist = math.hypot(c["cx"] - center_cx, c["cy"] - center_cy)
 
-        # Center circles
         if dist < center_tol:
             if abs(c["r"] - 14.5) < 0.1:
-                center_hole = c          # will be appended last as #5
+                center_hole = c
             else:
                 rings.append(c)
             continue
 
-        # Skip the r=2.0 that sits inside hole #1 at (152.16, 146.84)
         if abs(c["cx"] - 152.16) < 0.5 and abs(c["cy"] - 146.84) < 0.5 and abs(c["r"] - 2.0) < 0.1:
             rings.append(c)
             continue
@@ -184,17 +151,15 @@ def classify_holes_rear(circles, max_hole_radius=10.0,
             rings.append(c)
 
     if center_hole is not None:
-        holes.append(center_hole)   # becomes #5
+        holes.append(center_hole)
 
     return holes, rings
 
 
-# ── Rendering helpers ─────────────────────────────────────────────────────────
-PADDING   = 40    # px border around the geometry
-IMG_SIZE  = 900   # canvas size (square)
+PADDING   = 40
+IMG_SIZE  = 900
 
 def make_transform(all_x, all_y, img_size, padding):
-    """Return (scale, tx, ty) to map DXF coords → image pixels."""
     min_x, max_x = min(all_x), max(all_x)
     min_y, max_y = min(all_y), max(all_y)
     w = max_x - min_x or 1
@@ -206,16 +171,14 @@ def make_transform(all_x, all_y, img_size, padding):
 
 
 def dxf_to_px(x, y, scale, tx, ty, img_h):
-    """DXF Y is up; image Y is down — flip."""
     px = int(round(x * scale + tx))
     py = int(round(img_h - (y * scale + ty)))
     return px, py
 
 
 def draw_dxf(circles, arcs, lines, holes, rings, title, out_path):
-    img = np.ones((IMG_SIZE, IMG_SIZE, 3), dtype=np.uint8) * 30  # dark background
+    img = np.ones((IMG_SIZE, IMG_SIZE, 3), dtype=np.uint8) * 30
 
-    # Collect all points to compute transform
     all_x, all_y = [], []
     for c in circles:
         all_x += [c["cx"] - c["r"], c["cx"] + c["r"]]
@@ -235,7 +198,6 @@ def draw_dxf(circles, arcs, lines, holes, rings, title, out_path):
     def r_px(r):
         return max(1, int(round(r * scale)))
 
-    # ── Draw structural geometry in white ─────────────────────────────────────
     for c in rings:
         cx, cy = to_px(c["cx"], c["cy"])
         cv2.circle(img, (cx, cy), r_px(c["r"]), (200, 200, 200), 1, cv2.LINE_AA)
@@ -243,7 +205,6 @@ def draw_dxf(circles, arcs, lines, holes, rings, title, out_path):
     for a in arcs:
         cx, cy = to_px(a["cx"], a["cy"])
         rp = r_px(a["r"])
-        # OpenCV ellipse angles: 0=right, CCW positive; DXF same convention but Y-flipped
         start_a = -a["a_end"]
         end_a   = -a["a_start"]
         cv2.ellipse(img, (cx, cy), (rp, rp), 0,
@@ -254,26 +215,21 @@ def draw_dxf(circles, arcs, lines, holes, rings, title, out_path):
         p2 = to_px(l["x2"], l["y2"])
         cv2.line(img, p1, p2, (200, 200, 200), 1, cv2.LINE_AA)
 
-    # ── Draw holes highlighted ────────────────────────────────────────────────
-    HOLE_COLOR    = (0, 255, 128)   # bright green fill outline
-    LABEL_COLOR   = (0, 220, 255)   # cyan label
-    MARKER_COLOR  = (0, 80, 255)    # orange-red marker ring
+    HOLE_COLOR    = (0, 255, 128)
+    LABEL_COLOR   = (0, 220, 255)
+    MARKER_COLOR  = (0, 80, 255)
 
     for idx, h in enumerate(holes, start=1):
         cx, cy = to_px(h["cx"], h["cy"])
         rp     = r_px(h["r"])
 
-        # Filled semi-transparent highlight
         overlay = img.copy()
         cv2.circle(overlay, (cx, cy), rp, HOLE_COLOR, -1)
         cv2.addWeighted(overlay, 0.35, img, 0.65, 0, img)
 
-        # Bright outline
         cv2.circle(img, (cx, cy), rp,     HOLE_COLOR,   2, cv2.LINE_AA)
-        # Outer marker ring
         cv2.circle(img, (cx, cy), rp + 6, MARKER_COLOR, 1, cv2.LINE_AA)
 
-        # Number label
         label = str(idx)
         font  = cv2.FONT_HERSHEY_SIMPLEX
         fscale = 0.45
@@ -281,12 +237,10 @@ def draw_dxf(circles, arcs, lines, holes, rings, title, out_path):
         (tw, th), _ = cv2.getTextSize(label, font, fscale, thick)
         lx = cx - tw // 2
         ly = cy - rp - 10
-        # Keep label inside canvas
         lx = max(4, min(IMG_SIZE - tw - 4, lx))
         ly = max(th + 4, min(IMG_SIZE - 4, ly))
         cv2.putText(img, label, (lx, ly), font, fscale, LABEL_COLOR, thick, cv2.LINE_AA)
 
-    # ── Title ─────────────────────────────────────────────────────────────────
     cv2.putText(img, title, (12, 26),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2, cv2.LINE_AA)
     cv2.putText(img, f"{len(holes)} holes highlighted (green)",
@@ -296,7 +250,6 @@ def draw_dxf(circles, arcs, lines, holes, rings, title, out_path):
     print(f"  Saved: {out_path}")
 
 
-# ── Legend image ──────────────────────────────────────────────────────────────
 def draw_legend(holes, title, out_path):
     row_h  = 28
     margin = 16
@@ -323,7 +276,6 @@ def draw_legend(holes, title, out_path):
     print(f"  Saved: {out_path}")
 
 
-# ── Main ──────────────────────────────────────────────────────────────────────
 def process(dxf_path, label, out_prefix):
     print(f"\n{'-' * 50}")
     print(f"Processing: {dxf_path}  ({label})")
