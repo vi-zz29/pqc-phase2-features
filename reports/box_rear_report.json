@@ -1,0 +1,58 @@
+{
+  "report_metadata": {
+    "timestamp": "2026-06-13T12:48:06",
+    "image": "box_rear",
+    "identified_as": "box_rear",
+    "alignment_score": 0.9228,
+    "coverage": 0.9723,
+    "strategy": "affine_coarse_only",
+    "scale_px_per_mm": 11.9686,
+    "total_features": 4,
+    "pass_count": 2,
+    "fail_count": 2,
+    "overall_status": "FAIL",
+    "units": "pixels"
+  },
+  "features": [
+    {
+      "feature_name": "#1 rect cutout_width",
+      "feature_present": "YES",
+      "cad_size_px": 141.73,
+      "measured_size_px": 149.0,
+      "deviation_px": 7.27,
+      "tolerance_px": 5.0,
+      "status": "FAIL",
+      "unit": "px"
+    },
+    {
+      "feature_name": "#1 rect cutout_height",
+      "feature_present": "YES",
+      "cad_size_px": 141.73,
+      "measured_size_px": 149.0,
+      "deviation_px": 7.27,
+      "tolerance_px": 5.0,
+      "status": "FAIL",
+      "unit": "px"
+    },
+    {
+      "feature_name": "overall_width",
+      "feature_present": "YES",
+      "cad_size_px": 271.88,
+      "measured_size_px": 271.88,
+      "deviation_px": 0.0,
+      "tolerance_px": 10.0,
+      "status": "PASS",
+      "unit": "px"
+    },
+    {
+      "feature_name": "overall_height",
+      "feature_present": "YES",
+      "cad_size_px": 456.05,
+      "measured_size_px": 456.05,
+      "deviation_px": 0.0,
+      "tolerance_px": 10.0,
+      "status": "PASS",
+      "unit": "px"
+    }
+  ]
+}

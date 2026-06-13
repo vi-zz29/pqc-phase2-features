@@ -1,0 +1,428 @@
+{
+  "report_metadata": {
+    "timestamp": "2026-06-13T12:48:08",
+    "image": "frontt",
+    "identified_as": "circular_top",
+    "alignment_score": 0.6434,
+    "coverage": 0.9741,
+    "strategy": "affine_coarse_only",
+    "scale_px_per_mm": 3.5127,
+    "total_features": 41,
+    "pass_count": 41,
+    "fail_count": 0,
+    "overall_status": "PASS",
+    "units": "pixels"
+  },
+  "features": [
+    {
+      "feature_name": "hole #1",
+      "feature_present": "YES",
+      "cad_size_px": 7.9,
+      "measured_size_px": 8.0,
+      "deviation_px": 0.1,
+      "tolerance_px": 2.0,
+      "status": "PASS",
+      "unit": "px (radius)"
+    },
+    {
+      "feature_name": "hole #1_dia",
+      "feature_present": "YES",
+      "cad_size_px": 15.8,
+      "measured_size_px": 16.0,
+      "deviation_px": 0.2,
+      "tolerance_px": 4.0,
+      "status": "PASS",
+      "unit": "px (diameter)"
+    },
+    {
+      "feature_name": "hole #2",
+      "feature_present": "YES",
+      "cad_size_px": 5.79,
+      "measured_size_px": 6.0,
+      "deviation_px": 0.21,
+      "tolerance_px": 2.0,
+      "status": "PASS",
+      "unit": "px (radius)"
+    },
+    {
+      "feature_name": "hole #2_dia",
+      "feature_present": "YES",
+      "cad_size_px": 11.59,
+      "measured_size_px": 12.0,
+      "deviation_px": 0.41,
+      "tolerance_px": 4.0,
+      "status": "PASS",
+      "unit": "px (diameter)"
+    },
+    {
+      "feature_name": "hole #3",
+      "feature_present": "YES",
+      "cad_size_px": 5.79,
+      "measured_size_px": 6.0,
+      "deviation_px": 0.21,
+      "tolerance_px": 2.0,
+      "status": "PASS",
+      "unit": "px (radius)"
+    },
+    {
+      "feature_name": "hole #3_dia",
+      "feature_present": "YES",
+      "cad_size_px": 11.59,
+      "measured_size_px": 12.0,
+      "deviation_px": 0.41,
+      "tolerance_px": 4.0,
+      "status": "PASS",
+      "unit": "px (diameter)"
+    },
+    {
+      "feature_name": "hole #4",
+      "feature_present": "YES",
+      "cad_size_px": 5.79,
+      "measured_size_px": 6.0,
+      "deviation_px": 0.21,
+      "tolerance_px": 2.0,
+      "status": "PASS",
+      "unit": "px (radius)"
+    },
+    {
+      "feature_name": "hole #4_dia",
+      "feature_present": "YES",
+      "cad_size_px": 11.59,
+      "measured_size_px": 12.0,
+      "deviation_px": 0.41,
+      "tolerance_px": 4.0,
+      "status": "PASS",
+      "unit": "px (diameter)"
+    },
+    {
+      "feature_name": "hole #5",
+      "feature_present": "YES",
+      "cad_size_px": 7.9,
+      "measured_size_px": 8.0,
+      "deviation_px": 0.1,
+      "tolerance_px": 2.0,
+      "status": "PASS",
+      "unit": "px (radius)"
+    },
+    {
+      "feature_name": "hole #5_dia",
+      "feature_present": "YES",
+      "cad_size_px": 15.8,
+      "measured_size_px": 16.0,
+      "deviation_px": 0.2,
+      "tolerance_px": 4.0,
+      "status": "PASS",
+      "unit": "px (diameter)"
+    },
+    {
+      "feature_name": "hole #6",
+      "feature_present": "YES",
+      "cad_size_px": 7.9,
+      "measured_size_px": 8.0,
+      "deviation_px": 0.1,
+      "tolerance_px": 2.0,
+      "status": "PASS",
+      "unit": "px (radius)"
+    },
+    {
+      "feature_name": "hole #6_dia",
+      "feature_present": "YES",
+      "cad_size_px": 15.8,
+      "measured_size_px": 16.0,
+      "deviation_px": 0.2,
+      "tolerance_px": 4.0,
+      "status": "PASS",
+      "unit": "px (diameter)"
+    },
+    {
+      "feature_name": "hole #7",
+      "feature_present": "YES",
+      "cad_size_px": 9.13,
+      "measured_size_px": 9.0,
+      "deviation_px": -0.13,
+      "tolerance_px": 2.0,
+      "status": "PASS",
+      "unit": "px (radius)"
+    },
+    {
+      "feature_name": "hole #7_dia",
+      "feature_present": "YES",
+      "cad_size_px": 18.26,
+      "measured_size_px": 18.0,
+      "deviation_px": -0.26,
+      "tolerance_px": 4.0,
+      "status": "PASS",
+      "unit": "px (diameter)"
+    },
+    {
+      "feature_name": "hole #8",
+      "feature_present": "YES",
+      "cad_size_px": 9.13,
+      "measured_size_px": 9.0,
+      "deviation_px": -0.13,
+      "tolerance_px": 2.0,
+      "status": "PASS",
+      "unit": "px (radius)"
+    },
+    {
+      "feature_name": "hole #8_dia",
+      "feature_present": "YES",
+      "cad_size_px": 18.26,
+      "measured_size_px": 18.0,
+      "deviation_px": -0.26,
+      "tolerance_px": 4.0,
+      "status": "PASS",
+      "unit": "px (diameter)"
+    },
+    {
+      "feature_name": "hole #9",
+      "feature_present": "YES",
+      "cad_size_px": 9.13,
+      "measured_size_px": 9.0,
+      "deviation_px": -0.13,
+      "tolerance_px": 2.0,
+      "status": "PASS",
+      "unit": "px (radius)"
+    },
+    {
+      "feature_name": "hole #9_dia",
+      "feature_present": "YES",
+      "cad_size_px": 18.26,
+      "measured_size_px": 18.0,
+      "deviation_px": -0.26,
+      "tolerance_px": 4.0,
+      "status": "PASS",
+      "unit": "px (diameter)"
+    },
+    {
+      "feature_name": "hole #10",
+      "feature_present": "YES",
+      "cad_size_px": 9.13,
+      "measured_size_px": 9.0,
+      "deviation_px": -0.13,
+      "tolerance_px": 2.0,
+      "status": "PASS",
+      "unit": "px (radius)"
+    },
+    {
+      "feature_name": "hole #10_dia",
+      "feature_present": "YES",
+      "cad_size_px": 18.26,
+      "measured_size_px": 18.0,
+      "deviation_px": -0.26,
+      "tolerance_px": 4.0,
+      "status": "PASS",
+      "unit": "px (diameter)"
+    },
+    {
+      "feature_name": "hole #11",
+      "feature_present": "YES",
+      "cad_size_px": 9.13,
+      "measured_size_px": 9.0,
+      "deviation_px": -0.13,
+      "tolerance_px": 2.0,
+      "status": "PASS",
+      "unit": "px (radius)"
+    },
+    {
+      "feature_name": "hole #11_dia",
+      "feature_present": "YES",
+      "cad_size_px": 18.26,
+      "measured_size_px": 18.0,
+      "deviation_px": -0.26,
+      "tolerance_px": 4.0,
+      "status": "PASS",
+      "unit": "px (diameter)"
+    },
+    {
+      "feature_name": "hole #12",
+      "feature_present": "YES",
+      "cad_size_px": 9.13,
+      "measured_size_px": 9.0,
+      "deviation_px": -0.13,
+      "tolerance_px": 2.0,
+      "status": "PASS",
+      "unit": "px (radius)"
+    },
+    {
+      "feature_name": "hole #12_dia",
+      "feature_present": "YES",
+      "cad_size_px": 18.26,
+      "measured_size_px": 18.0,
+      "deviation_px": -0.26,
+      "tolerance_px": 4.0,
+      "status": "PASS",
+      "unit": "px (diameter)"
+    },
+    {
+      "feature_name": "hole #13",
+      "feature_present": "YES",
+      "cad_size_px": 9.13,
+      "measured_size_px": 9.0,
+      "deviation_px": -0.13,
+      "tolerance_px": 2.0,
+      "status": "PASS",
+      "unit": "px (radius)"
+    },
+    {
+      "feature_name": "hole #13_dia",
+      "feature_present": "YES",
+      "cad_size_px": 18.26,
+      "measured_size_px": 18.0,
+      "deviation_px": -0.26,
+      "tolerance_px": 4.0,
+      "status": "PASS",
+      "unit": "px (diameter)"
+    },
+    {
+      "feature_name": "hole #14",
+      "feature_present": "YES",
+      "cad_size_px": 9.13,
+      "measured_size_px": 9.0,
+      "deviation_px": -0.13,
+      "tolerance_px": 2.0,
+      "status": "PASS",
+      "unit": "px (radius)"
+    },
+    {
+      "feature_name": "hole #14_dia",
+      "feature_present": "YES",
+      "cad_size_px": 18.26,
+      "measured_size_px": 18.0,
+      "deviation_px": -0.26,
+      "tolerance_px": 4.0,
+      "status": "PASS",
+      "unit": "px (diameter)"
+    },
+    {
+      "feature_name": "hole #15",
+      "feature_present": "YES",
+      "cad_size_px": 9.13,
+      "measured_size_px": 9.0,
+      "deviation_px": -0.13,
+      "tolerance_px": 2.0,
+      "status": "PASS",
+      "unit": "px (radius)"
+    },
+    {
+      "feature_name": "hole #15_dia",
+      "feature_present": "YES",
+      "cad_size_px": 18.26,
+      "measured_size_px": 18.0,
+      "deviation_px": -0.26,
+      "tolerance_px": 4.0,
+      "status": "PASS",
+      "unit": "px (diameter)"
+    },
+    {
+      "feature_name": "hole #16",
+      "feature_present": "YES",
+      "cad_size_px": 9.13,
+      "measured_size_px": 9.0,
+      "deviation_px": -0.13,
+      "tolerance_px": 2.0,
+      "status": "PASS",
+      "unit": "px (radius)"
+    },
+    {
+      "feature_name": "hole #16_dia",
+      "feature_present": "YES",
+      "cad_size_px": 18.26,
+      "measured_size_px": 18.0,
+      "deviation_px": -0.26,
+      "tolerance_px": 4.0,
+      "status": "PASS",
+      "unit": "px (diameter)"
+    },
+    {
+      "feature_name": "hole #17",
+      "feature_present": "YES",
+      "cad_size_px": 9.13,
+      "measured_size_px": 9.0,
+      "deviation_px": -0.13,
+      "tolerance_px": 2.0,
+      "status": "PASS",
+      "unit": "px (radius)"
+    },
+    {
+      "feature_name": "hole #17_dia",
+      "feature_present": "YES",
+      "cad_size_px": 18.26,
+      "measured_size_px": 18.0,
+      "deviation_px": -0.26,
+      "tolerance_px": 4.0,
+      "status": "PASS",
+      "unit": "px (diameter)"
+    },
+    {
+      "feature_name": "hole #18",
+      "feature_present": "YES",
+      "cad_size_px": 9.13,
+      "measured_size_px": 9.0,
+      "deviation_px": -0.13,
+      "tolerance_px": 2.0,
+      "status": "PASS",
+      "unit": "px (radius)"
+    },
+    {
+      "feature_name": "hole #18_dia",
+      "feature_present": "YES",
+      "cad_size_px": 18.26,
+      "measured_size_px": 18.0,
+      "deviation_px": -0.26,
+      "tolerance_px": 4.0,
+      "status": "PASS",
+      "unit": "px (diameter)"
+    },
+    {
+      "feature_name": "hole #19",
+      "feature_present": "YES",
+      "cad_size_px": 50.92,
+      "measured_size_px": 51.0,
+      "deviation_px": 0.08,
+      "tolerance_px": 2.0,
+      "status": "PASS",
+      "unit": "px (radius)"
+    },
+    {
+      "feature_name": "hole #19_dia",
+      "feature_present": "YES",
+      "cad_size_px": 101.85,
+      "measured_size_px": 102.0,
+      "deviation_px": 0.15,
+      "tolerance_px": 4.0,
+      "status": "PASS",
+      "unit": "px (diameter)"
+    },
+    {
+      "feature_name": "outer_diameter",
+      "feature_present": "YES",
+      "cad_size_px": 203.7,
+      "measured_size_px": 203.7,
+      "deviation_px": 0.0,
+      "tolerance_px": 8.0,
+      "status": "PASS",
+      "unit": "px"
+    },
+    {
+      "feature_name": "center_bore",
+      "feature_present": "NO",
+      "cad_size_px": 101.85,
+      "measured_size_px": 102.0,
+      "deviation_px": 0.15,
+      "tolerance_px": 5.0,
+      "status": "PASS",
+      "unit": "px"
+    },
+    {
+      "feature_name": "pcd",
+      "feature_present": "NO",
+      "cad_size_px": 334.94,
+      "measured_size_px": 337.08,
+      "deviation_px": 2.14,
+      "tolerance_px": 8.0,
+      "status": "PASS",
+      "unit": "px"
+    }
+  ]
+}

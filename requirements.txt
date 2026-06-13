@@ -1,2 +1,4 @@
 opencv-python>=4.5.0
 numpy>=1.20.0
+ezdxf>=1.0.0
+scipy>=1.7.0
