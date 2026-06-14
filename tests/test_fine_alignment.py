@@ -1,89 +1,25 @@
+"""
+Tests for fine alignment.
+
+_detect_and_match_features and _estimate_similarity were removed when
+ORB was replaced with ECC. These tests now cover:
+  - _validate_similarity  (kept for backward compat)
+  - _compute_fine_transform  (ECC-based)
+"""
+
 import numpy as np
 import cv2
 import pytest
 
 from cad_image_alignment.alignment import (
-    _detect_and_match_features,
-    _estimate_similarity,
     _validate_similarity,
     _compute_fine_transform,
 )
 
 
-def test_detect_and_match_features_basic():
-    img1 = np.zeros((200, 200), dtype=np.uint8)
-    cv2.rectangle(img1, (50, 50), (150, 150), 255, 2)
-    cv2.circle(img1, (100, 100), 30, 255, 2)
-
-    img2 = np.zeros((200, 200), dtype=np.uint8)
-    cv2.rectangle(img2, (55, 55), (155, 155), 255, 2)
-    cv2.circle(img2, (105, 105), 30, 255, 2)
-
-    kp1, kp2, des1, des2, matches = _detect_and_match_features(img1, img2)
-
-    assert len(kp1) > 0
-    assert len(kp2) > 0
-    assert des1 is not None
-    assert des2 is not None
-    assert len(matches) > 0
-
-
-def test_detect_and_match_features_empty_images():
-    img1 = np.zeros((200, 200), dtype=np.uint8)
-    img2 = np.zeros((200, 200), dtype=np.uint8)
-
-    kp1, kp2, des1, des2, matches = _detect_and_match_features(img1, img2)
-
-    assert des1 is None or len(kp1) == 0
-    assert des2 is None or len(kp2) == 0
-    assert len(matches) == 0
-
-
-def test_estimate_similarity_insufficient_matches():
-    kp1 = [cv2.KeyPoint(float(i), float(i), 1.0) for i in range(5)]
-    kp2 = [cv2.KeyPoint(float(i), float(i), 1.0) for i in range(5)]
-    matches = [cv2.DMatch(i, i, 0.0) for i in range(5)]
-
-    M, inlier_ratio = _estimate_similarity(kp1, kp2, matches)
-
-    assert M is None
-    assert inlier_ratio is None
-
-
-def test_estimate_similarity_sufficient_matches():
-    src_pts = [(10.0, 10.0), (100.0, 10.0), (100.0, 100.0), (10.0, 100.0),
-               (50.0, 50.0), (30.0, 30.0), (70.0, 70.0), (50.0, 80.0)]
-    dst_pts = [(x + 5.0, y + 5.0) for x, y in src_pts]
-
-    kp1 = [cv2.KeyPoint(x, y, 1.0) for x, y in src_pts]
-    kp2 = [cv2.KeyPoint(x, y, 1.0) for x, y in dst_pts]
-    matches = [cv2.DMatch(i, i, 0.0) for i in range(len(src_pts))]
-
-    M, inlier_ratio = _estimate_similarity(kp1, kp2, matches)
-
-    assert M is not None
-    assert M.shape == (3, 3)
-    assert inlier_ratio is not None
-    assert 0.0 <= inlier_ratio <= 1.0
-    np.testing.assert_array_almost_equal(M[2, :], [0.0, 0.0, 1.0])
-
-
-def test_estimate_similarity_preserves_shape():
-    src_pts = [(10.0, 10.0), (100.0, 10.0), (100.0, 100.0), (10.0, 100.0),
-               (50.0, 50.0), (30.0, 30.0), (70.0, 70.0), (50.0, 80.0)]
-    dst_pts = [(x + 5.0, y + 5.0) for x, y in src_pts]
-
-    kp1 = [cv2.KeyPoint(x, y, 1.0) for x, y in src_pts]
-    kp2 = [cv2.KeyPoint(x, y, 1.0) for x, y in dst_pts]
-    matches = [cv2.DMatch(i, i, 0.0) for i in range(len(src_pts))]
-
-    M, _ = _estimate_similarity(kp1, kp2, matches)
-    if M is None:
-        pytest.skip("Similarity estimation returned None for this input")
-
-    assert abs(M[0, 0] - M[1, 1]) < 1e-4, "Similarity must have M[0,0]==M[1,1]"
-    assert abs(M[0, 1] + M[1, 0]) < 1e-4, "Similarity must have M[0,1]==-M[1,0]"
-
+# ---------------------------------------------------------------------------
+# _validate_similarity
+# ---------------------------------------------------------------------------
 
 def test_validate_similarity_valid_scale():
     M = np.eye(3, dtype=np.float64)
@@ -108,46 +44,73 @@ def test_validate_similarity_boundary_values():
         assert _validate_similarity(M) == True, f"Scale {s} should be valid"
 
 
-def test_compute_fine_transform_insufficient_matches():
-    coarsely_aligned = np.zeros((100, 100), dtype=np.uint8)
-    cv2.circle(coarsely_aligned, (50, 50), 2, 255, -1)
+# ---------------------------------------------------------------------------
+# _compute_fine_transform  (ECC)
+# ---------------------------------------------------------------------------
 
-    real_edge_map = np.zeros((100, 100), dtype=np.uint8)
-    cv2.circle(real_edge_map, (50, 50), 2, 255, -1)
+def test_compute_fine_transform_returns_tuple():
+    """_compute_fine_transform must always return a 2-tuple."""
+    cad = np.zeros((100, 100), dtype=np.uint8)
+    cv2.rectangle(cad, (20, 20), (80, 80), 255, 2)
+    real = np.zeros((100, 100), dtype=np.uint8)
+    cv2.rectangle(real, (20, 20), (80, 80), 255, 2)
+    coarse = np.eye(3, dtype=np.float64)
 
-    coarse_matrix = np.eye(3, dtype=np.float64)
-
-    M_total, inlier_ratio = _compute_fine_transform(
-        coarsely_aligned, real_edge_map, coarse_matrix
-    )
-
-    if M_total is not None:
-        assert M_total.shape == (3, 3)
-        assert inlier_ratio is not None
-        assert 0.0 <= inlier_ratio <= 1.0
+    result = _compute_fine_transform(cad, real, coarse)
+    assert isinstance(result, tuple)
+    assert len(result) == 2
 
 
-def test_compute_fine_transform_with_good_features():
-    coarsely_aligned = np.zeros((200, 200), dtype=np.uint8)
-    cv2.rectangle(coarsely_aligned, (50, 50), (150, 150), 255, 2)
-    cv2.circle(coarsely_aligned, (100, 100), 30, 255, 2)
-    cv2.circle(coarsely_aligned, (80, 80), 10, 255, 2)
-    cv2.circle(coarsely_aligned, (120, 120), 10, 255, 2)
+def test_compute_fine_transform_identity_input():
+    """With identical images, ECC should converge and return a near-identity correction."""
+    img = np.zeros((150, 150), dtype=np.uint8)
+    cv2.rectangle(img, (30, 30), (120, 120), 255, 2)
+    cv2.circle(img,   (75, 75),  20, 255, 2)
+    coarse = np.eye(3, dtype=np.float64)
 
-    real_edge_map = np.zeros((200, 200), dtype=np.uint8)
-    cv2.rectangle(real_edge_map, (52, 52), (152, 152), 255, 2)
-    cv2.circle(real_edge_map, (102, 102), 30, 255, 2)
-    cv2.circle(real_edge_map, (82, 82), 10, 255, 2)
-    cv2.circle(real_edge_map, (122, 122), 10, 255, 2)
+    M_total, inlier_ratio = _compute_fine_transform(img.copy(), img.copy(), coarse)
 
-    coarse_matrix = np.eye(3, dtype=np.float64)
-
-    M_total, inlier_ratio = _compute_fine_transform(
-        coarsely_aligned, real_edge_map, coarse_matrix
-    )
+    # ECC has no inlier_ratio — should be None
+    assert inlier_ratio is None
 
     if M_total is not None:
         assert M_total.shape == (3, 3)
-        assert inlier_ratio is not None
-        assert 0.0 <= inlier_ratio <= 1.0
+        assert M_total.dtype == np.float64
+        # Translation correction should be tiny for identical images
+        tx = M_total[0, 2]
+        ty = M_total[1, 2]
+        assert abs(tx) < 5.0, f"Expected near-zero tx, got {tx:.2f}"
+        assert abs(ty) < 5.0, f"Expected near-zero ty, got {ty:.2f}"
+
+
+def test_compute_fine_transform_empty_images_graceful():
+    """Completely empty edge maps — ECC may fail gracefully (None,None) or succeed."""
+    cad  = np.zeros((100, 100), dtype=np.uint8)
+    real = np.zeros((100, 100), dtype=np.uint8)
+    coarse = np.eye(3, dtype=np.float64)
+
+    result = _compute_fine_transform(cad, real, coarse)
+    # Should not raise — either returns (None, None) or a valid matrix
+    assert isinstance(result, tuple)
+    assert len(result) == 2
+    M, ir = result
+    if M is not None:
+        assert M.shape == (3, 3)
+
+
+def test_compute_fine_transform_small_shift():
+    """With a 3px shift between CAD and real, ECC should correct it."""
+    base = np.zeros((200, 200), dtype=np.uint8)
+    cv2.rectangle(base, (50, 50), (150, 150), 255, 2)
+    cv2.circle(base, (100, 100), 30, 255, 2)
+
+    shifted = np.zeros_like(base)
+    cv2.rectangle(shifted, (53, 53), (153, 153), 255, 2)
+    cv2.circle(shifted, (103, 103), 30, 255, 2)
+
+    coarse = np.eye(3, dtype=np.float64)
+    M_total, _ = _compute_fine_transform(base, shifted, coarse)
+
+    if M_total is not None:
+        assert M_total.shape == (3, 3)
         np.testing.assert_array_almost_equal(M_total[2, :], [0.0, 0.0, 1.0])

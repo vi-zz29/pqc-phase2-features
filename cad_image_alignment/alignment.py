@@ -29,6 +29,10 @@ class AlignmentResult:
     inlier_ratio: Optional[float]
 
 
+# ---------------------------------------------------------------------------
+# Input validation
+# ---------------------------------------------------------------------------
+
 def _validate_inputs(
     cad_edge_map: np.ndarray,
     real_edge_map: np.ndarray,
@@ -37,31 +41,22 @@ def _validate_inputs(
         raise ValueError(
             f"cad_edge_map has invalid dtype {cad_edge_map.dtype}, expected uint8"
         )
-
     if real_edge_map.dtype != np.uint8:
         raise ValueError(
             f"real_edge_map has invalid dtype {real_edge_map.dtype}, expected uint8"
         )
-
     if cad_edge_map.ndim != 2:
         raise ValueError(
             f"cad_edge_map has invalid ndim {cad_edge_map.ndim}, expected 2"
         )
-
     if real_edge_map.ndim != 2:
         raise ValueError(
             f"real_edge_map has invalid ndim {real_edge_map.ndim}, expected 2"
         )
-
     if not np.any(cad_edge_map):
-        raise ValueError(
-            "cad_edge_map is empty (contains no non-zero pixels)"
-        )
-
+        raise ValueError("cad_edge_map is empty (contains no non-zero pixels)")
     if not np.any(real_edge_map):
-        raise ValueError(
-            "real_edge_map is empty (contains no non-zero pixels)"
-        )
+        raise ValueError("real_edge_map is empty (contains no non-zero pixels)")
 
     if cad_edge_map.shape != real_edge_map.shape:
         rh, rw = real_edge_map.shape
@@ -70,7 +65,6 @@ def _validate_inputs(
             f"Resolution mismatch: cad {cad_edge_map.shape} → real canvas {real_edge_map.shape}. "
             f"Cropping to part bbox then uniform-scaling to preserve design geometry."
         )
-
         contours, _ = cv2.findContours(
             cad_edge_map, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
         )
@@ -86,7 +80,6 @@ def _validate_inputs(
             logger.debug(
                 f"Cropped CAD to part bbox ({bx},{by},{bw},{bh}) + margin → {cad_edge_map.shape}"
             )
-
         ch2, cw2 = cad_edge_map.shape
         fit_scale = min(rw / cw2, rh / ch2)
         new_w = int(round(cw2 * fit_scale))
@@ -94,7 +87,6 @@ def _validate_inputs(
         interp = cv2.INTER_AREA if fit_scale < 1.0 else cv2.INTER_LINEAR
         scaled = cv2.resize(cad_edge_map, (new_w, new_h), interpolation=interp)
         _, scaled = cv2.threshold(scaled, 20, 255, cv2.THRESH_BINARY)
-
         canvas = np.zeros((rh, rw), dtype=np.uint8)
         y_off = (rh - new_h) // 2
         x_off = (rw - new_w) // 2
@@ -104,39 +96,36 @@ def _validate_inputs(
     return cad_edge_map
 
 
+# ---------------------------------------------------------------------------
+# PCA angle
+# ---------------------------------------------------------------------------
+
 def _compute_pca_angle(contour: np.ndarray) -> float:
     pts = contour.reshape(-1, 2).astype(np.float64)
-
     mean = pts.mean(axis=0)
     centered = pts - mean
-
     cov = centered.T @ centered
-
-    eigenvalues, eigenvectors = np.linalg.eigh(cov)
-
+    _, eigenvectors = np.linalg.eigh(cov)
     principal = eigenvectors[:, -1]
-
     angle_rad = np.arctan2(principal[1], principal[0])
     angle_deg = np.degrees(angle_rad)
-
     if angle_deg < 0:
         angle_deg += 360.0
-
     return angle_deg
 
+
+# ---------------------------------------------------------------------------
+# Primary contour extraction
+# ---------------------------------------------------------------------------
 
 def _extract_primary_contour(edge_map: np.ndarray) -> Optional[ContourDescriptor]:
     from .constants import MIN_CONTOUR_AREA_FRACTION
 
     contours, _ = cv2.findContours(
-        edge_map,
-        cv2.RETR_EXTERNAL,
-        cv2.CHAIN_APPROX_SIMPLE
+        edge_map, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
     )
-
     image_area = edge_map.shape[0] * edge_map.shape[1]
     min_area = image_area * MIN_CONTOUR_AREA_FRACTION
-
     valid_contours = [c for c in contours if cv2.contourArea(c) >= min_area]
 
     if not valid_contours:
@@ -171,9 +160,13 @@ def _extract_primary_contour(edge_map: np.ndarray) -> Optional[ContourDescriptor
         centroid=centroid,
         bbox=bbox,
         bbox_diagonal=bbox_diagonal,
-        pca_angle_deg=pca_angle_deg
+        pca_angle_deg=pca_angle_deg,
     )
 
+
+# ---------------------------------------------------------------------------
+# Affine matrix builder
+# ---------------------------------------------------------------------------
 
 def _build_affine_matrix(
     scale: float,
@@ -183,25 +176,24 @@ def _build_affine_matrix(
 ) -> np.ndarray:
     cx_src, cy_src = src_centroid
     cx_dst, cy_dst = dst_centroid
-
     angle_rad = np.radians(angle_deg)
     cos_a = np.cos(angle_rad)
     sin_a = np.sin(angle_rad)
-
     s_cos = scale * cos_a
     s_sin = scale * sin_a
-
     tx = cx_dst - cx_src
     ty = cy_dst - cy_src
-
     M = np.array([
         [s_cos, -s_sin, cx_src * (1 - s_cos) + cy_src * s_sin + tx],
         [s_sin,  s_cos, cy_src * (1 - s_cos) - cx_src * s_sin + ty],
-        [0.0,    0.0,   1.0]
+        [0.0,    0.0,   1.0],
     ], dtype=np.float64)
-
     return M
 
+
+# ---------------------------------------------------------------------------
+# Silhouette fill — with open-contour guard
+# ---------------------------------------------------------------------------
 
 def _fill_silhouette(edge_map: np.ndarray) -> np.ndarray:
     h, w = edge_map.shape
@@ -209,20 +201,34 @@ def _fill_silhouette(edge_map: np.ndarray) -> np.ndarray:
     closed = cv2.morphologyEx(
         edge_map,
         cv2.MORPH_CLOSE,
-        cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+        cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)),
     )
 
     canvas = np.zeros((h + 2, w + 2), dtype=np.uint8)
-    canvas[1:h+1, 1:w+1] = closed
+    canvas[1:h + 1, 1:w + 1] = closed
 
     inv = cv2.bitwise_not(canvas)
     ff_mask = np.zeros((h + 4, w + 4), dtype=np.uint8)
     cv2.floodFill(inv, ff_mask, (0, 0), 0)
 
-    filled = inv[1:h+1, 1:w+1]
+    filled = inv[1:h + 1, 1:w + 1]
+
+    # Guard: if the filled region is >80% of the image, the flood fill escaped
+    # an open contour and filled the background. Fall back to closed edges.
+    filled_fraction = float(np.count_nonzero(filled)) / float(h * w)
+    if filled_fraction > 0.80:
+        logger.debug(
+            "_fill_silhouette: flood-fill escaped open contour "
+            f"(filled {filled_fraction:.1%}), using morphologically closed edges"
+        )
+        return closed
 
     return filled
 
+
+# ---------------------------------------------------------------------------
+# Alignment score (IoU on filled silhouettes)
+# ---------------------------------------------------------------------------
 
 def _compute_alignment_score(
     aligned_image: np.ndarray,
@@ -230,14 +236,16 @@ def _compute_alignment_score(
 ) -> float:
     cad_filled  = _fill_silhouette(aligned_image)
     real_filled = _fill_silhouette(reference)
-
     intersection = np.logical_and(cad_filled > 0, real_filled > 0).sum()
     union        = np.logical_or(cad_filled  > 0, real_filled > 0).sum()
-
     if union == 0:
         return 0.0
     return float(intersection) / float(union)
 
+
+# ---------------------------------------------------------------------------
+# Coarse transform (grid search over angle / scale)
+# ---------------------------------------------------------------------------
 
 def _compute_coarse_transform(
     cad_edge_map: np.ndarray,
@@ -278,8 +286,7 @@ def _compute_coarse_transform(
     )
 
     scale_band = [0.90, 0.95, 1.00, 1.05, 1.10]
-
-    pca_diff = real_descriptor.pca_angle_deg - cad_descriptor.pca_angle_deg
+    pca_diff   = real_descriptor.pca_angle_deg - cad_descriptor.pca_angle_deg
     coarse_step = 10
     coarse_angles = list(set(
         list(range(0, 360, coarse_step)) + [
@@ -289,7 +296,6 @@ def _compute_coarse_transform(
     ))
 
     EARLY_EXIT_SCORE = 0.88
-
     GRID_SCALE = 0.5
     h_grid = max(1, int(h_small * GRID_SCALE))
     w_grid = max(1, int(w_small * GRID_SCALE))
@@ -325,13 +331,12 @@ def _compute_coarse_transform(
         s = base_scale * sf
         for angle in coarse_angles:
             M = _build_affine_matrix(
-                scale=s,
-                angle_deg=angle,
+                scale=s, angle_deg=angle,
                 src_centroid=grid_desc_cad.centroid,
                 dst_centroid=grid_desc_real.centroid,
             )
             warped = apply_transform(cad_grid, M, output_shape=real_grid.shape)
-            score = _fast_iou(warped)
+            score  = _fast_iou(warped)
             if score > best_score_grid:
                 best_score_grid = score
                 best_angle_coarse, best_sf_coarse = angle, sf
@@ -341,7 +346,7 @@ def _compute_coarse_transform(
                 break
 
     top_candidates.sort(key=lambda x: x[0], reverse=True)
-    top_n = min(20, len(top_candidates))
+    top_n      = min(20, len(top_candidates))
     top_angles = list(set(int(c[1]) for c in top_candidates[:top_n]))
     top_sfs    = list(set(c[2]      for c in top_candidates[:top_n]))
 
@@ -353,8 +358,7 @@ def _compute_coarse_transform(
         s = base_scale * sf
         for angle in top_angles:
             M = _build_affine_matrix(
-                scale=s,
-                angle_deg=angle,
+                scale=s, angle_deg=angle,
                 src_centroid=grid_desc_cad.centroid,
                 dst_centroid=grid_desc_real.centroid,
             )
@@ -367,13 +371,13 @@ def _compute_coarse_transform(
                 best_score_verify = score
                 best_angle_coarse, best_sf_coarse = angle, sf
 
-    fine_angles = list(range(best_angle_coarse - coarse_step,
-                             best_angle_coarse + coarse_step + 1))
+    fine_angles  = list(range(best_angle_coarse - coarse_step,
+                               best_angle_coarse + coarse_step + 1))
     fine_angles += list(range(int(pca_diff) - coarse_step,
-                              int(pca_diff) + coarse_step + 1))
+                               int(pca_diff) + coarse_step + 1))
     fine_angles += list(range(int(pca_diff + 180) - coarse_step,
-                              int(pca_diff + 180) + coarse_step + 1))
-    fine_angles = list(set(fine_angles))
+                               int(pca_diff + 180) + coarse_step + 1))
+    fine_angles  = list(set(fine_angles))
 
     best_fine_angle, best_fine_sf = best_angle_coarse, best_sf_coarse
     best_score_fine = -1.0
@@ -382,8 +386,7 @@ def _compute_coarse_transform(
         s = base_scale * sf
         for angle in fine_angles:
             M = _build_affine_matrix(
-                scale=s,
-                angle_deg=angle,
+                scale=s, angle_deg=angle,
                 src_centroid=grid_desc_cad.centroid,
                 dst_centroid=grid_desc_real.centroid,
             )
@@ -397,15 +400,14 @@ def _compute_coarse_transform(
                 best_fine_angle, best_fine_sf = angle, sf
 
     real_filled = _fill_silhouette(real_small)
-    best_M = np.eye(3, dtype=np.float64)
+    best_M   = np.eye(3, dtype=np.float64)
     best_score = -1.0
 
     for sf in [best_fine_sf - 0.03, best_fine_sf, best_fine_sf + 0.03]:
         s = base_scale * sf
         for angle in [best_fine_angle - 1, best_fine_angle, best_fine_angle + 1]:
             M = _build_affine_matrix(
-                scale=s,
-                angle_deg=angle,
+                scale=s, angle_deg=angle,
                 src_centroid=cad_descriptor.centroid,
                 dst_centroid=real_descriptor.centroid,
             )
@@ -422,138 +424,111 @@ def _compute_coarse_transform(
     S_down = np.array([[COARSE_SCALE, 0, 0],
                         [0, COARSE_SCALE, 0],
                         [0, 0,            1]], dtype=np.float64)
-    S_up   = np.array([[1/COARSE_SCALE, 0, 0],
-                        [0, 1/COARSE_SCALE, 0],
-                        [0, 0,              1]], dtype=np.float64)
-    best_M_full = S_up @ best_M @ S_down
-
-    return best_M_full
+    S_up   = np.array([[1 / COARSE_SCALE, 0, 0],
+                        [0, 1 / COARSE_SCALE, 0],
+                        [0, 0,               1]], dtype=np.float64)
+    return S_up @ best_M @ S_down
 
 
-def _detect_and_match_features(
-    image1: np.ndarray,
-    image2: np.ndarray,
-) -> tuple[list, list, np.ndarray, np.ndarray, list]:
-    from .constants import ORB_N_FEATURES, ORB_SCALE_FACTOR, ORB_N_LEVELS
-
-    orb = cv2.ORB_create(
-        nfeatures=ORB_N_FEATURES,
-        scaleFactor=ORB_SCALE_FACTOR,
-        nlevels=ORB_N_LEVELS
-    )
-
-    kp1, des1 = orb.detectAndCompute(image1, None)
-    kp2, des2 = orb.detectAndCompute(image2, None)
-
-    if des1 is None or des2 is None:
-        logger.debug(
-            f"No descriptors found: des1={des1 is not None}, des2={des2 is not None}"
-        )
-        return kp1, kp2, des1, des2, []
-
-    bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
-
-    matches = bf.match(des1, des2)
-    matches = sorted(matches, key=lambda m: m.distance)
-
-    logger.debug(f"ORB detected {len(kp1)} and {len(kp2)} keypoints, {len(matches)} matches")
-
-    return kp1, kp2, des1, des2, matches
-
-
-def _estimate_similarity(
-    keypoints1: list,
-    keypoints2: list,
-    matches: list,
-) -> tuple[Optional[np.ndarray], Optional[float]]:
-    from .constants import MIN_MATCH_COUNT, RANSAC_REPROJ_THRESHOLD
-
-    if len(matches) < MIN_MATCH_COUNT:
-        logger.debug(f"Insufficient matches: {len(matches)} < {MIN_MATCH_COUNT}")
-        return None, None
-
-    src_pts = np.float32([keypoints1[m.queryIdx].pt for m in matches])
-    dst_pts = np.float32([keypoints2[m.trainIdx].pt for m in matches])
-
-    M2x3, mask = cv2.estimateAffinePartial2D(
-        src_pts, dst_pts,
-        method=cv2.RANSAC,
-        ransacReprojThreshold=RANSAC_REPROJ_THRESHOLD,
-    )
-
-    if M2x3 is None or mask is None:
-        logger.debug("Similarity estimation failed")
-        return None, None
-
-    inlier_ratio = float(mask.sum()) / len(mask)
-
-    M3x3 = np.eye(3, dtype=np.float64)
-    M3x3[:2, :] = M2x3
-
-    logger.debug(
-        f"Similarity estimated with {mask.sum()}/{len(mask)} inliers "
-        f"(ratio={inlier_ratio:.3f})"
-    )
-
-    return M3x3, inlier_ratio
-
-
-def _validate_similarity(M: np.ndarray) -> bool:
-    from .constants import SCALE_MIN, SCALE_MAX
-
-    scale = np.sqrt(M[0, 0] ** 2 + M[1, 0] ** 2)
-
-    is_valid = SCALE_MIN <= scale <= SCALE_MAX
-    if not is_valid:
-        logger.debug(f"Similarity scale {scale:.3f} outside valid range [{SCALE_MIN}, {SCALE_MAX}]")
-    return is_valid
-
+# ---------------------------------------------------------------------------
+# ECC fine alignment  (replaces ORB-based approach)
+# ---------------------------------------------------------------------------
 
 def _compute_fine_transform(
     coarsely_aligned_cad: np.ndarray,
     real_edge_map: np.ndarray,
     coarse_matrix: np.ndarray,
 ) -> tuple[Optional[np.ndarray], Optional[float]]:
-    from .constants import MIN_MATCH_COUNT, MIN_INLIER_RATIO
+    """
+    Refine the coarse transform using ECC (Enhanced Correlation Coefficient).
 
-    kp1, kp2, des1, des2, matches = _detect_and_match_features(
-        coarsely_aligned_cad,
-        real_edge_map
+    Uses MOTION_EUCLIDEAN (rotation + translation only).  ECC is seeded with
+    identity because the coarse_matrix has already been applied to produce
+    coarsely_aligned_cad — so the residual correction should be near-identity.
+
+    Returns (M_total_3x3, None).  No inlier_ratio concept for ECC.
+    """
+    from .constants import ECC_MAX_ITERATIONS, ECC_EPSILON, ECC_WARP_MODE
+
+    # Dilate edges so the gradient field has overlap to work with
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+    cad_d  = cv2.dilate(coarsely_aligned_cad, kernel, iterations=2)
+    real_d = cv2.dilate(real_edge_map,         kernel, iterations=2)
+
+    # ECC needs float32
+    src_f = cad_d.astype(np.float32)
+    dst_f = real_d.astype(np.float32)
+
+    # CRITICAL: seed ECC with IDENTITY, not the coarse matrix.
+    # coarsely_aligned_cad has already been warped by coarse_matrix.
+    # ECC only needs to find the small residual correction (near-identity).
+    # Seeding with the full coarse matrix (which encodes scale) causes
+    # ECC to diverge because MOTION_EUCLIDEAN cannot represent scale.
+    warp_init = np.eye(2, 3, dtype=np.float32)
+
+    criteria = (
+        cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT,
+        ECC_MAX_ITERATIONS,
+        ECC_EPSILON,
     )
 
-    if len(matches) < MIN_MATCH_COUNT:
+    # gaussFiltSize must be a positive odd integer.
+    # 5 works for most images; if images are very high-res this can be increased.
+    try:
+        _, warp_ecc = cv2.findTransformECC(
+            dst_f, src_f,   # (template=real, input=cad)
+            warp_init,
+            ECC_WARP_MODE,
+            criteria,
+            None,           # inputMask
+            5,              # gaussFiltSize — must be positive odd integer
+        )
+    except cv2.error as exc:
+        logger.warning(f"ECC fine alignment failed: {exc}")
+        return None, None
+
+    # Build 3×3 from 2×3 result
+    M_ecc = np.eye(3, dtype=np.float64)
+    M_ecc[:2, :] = warp_ecc.astype(np.float64)
+
+    # Validate: ECC corrects only small residuals — scale must be near 1
+    # (MOTION_EUCLIDEAN preserves scale so this is a sanity check on convergence)
+    scale = float(np.sqrt(M_ecc[0, 0] ** 2 + M_ecc[1, 0] ** 2))
+    if not (0.92 <= scale <= 1.08):
         logger.warning(
-            f"Fine alignment failed: insufficient keypoint matches "
-            f"({len(matches)} < {MIN_MATCH_COUNT})"
+            f"ECC fine alignment rejected: scale={scale:.3f} outside [0.92, 1.08] "
+            f"(indicates divergence)"
         )
         return None, None
 
-    M_fine, inlier_ratio = _estimate_similarity(kp1, kp2, matches)
+    # M_ecc is the residual correction applied ON TOP of coarse_matrix
+    M_total = M_ecc @ coarse_matrix
+    logger.debug(f"ECC fine alignment succeeded: residual_scale={scale:.4f}")
+    return M_total, None
 
-    if M_fine is None:
-        logger.warning("Fine alignment failed: similarity estimation failed")
-        return None, None
 
-    if inlier_ratio < MIN_INLIER_RATIO:
-        logger.warning(
-            f"Fine alignment failed: low inlier ratio "
-            f"({inlier_ratio:.3f} < {MIN_INLIER_RATIO})"
+# ---------------------------------------------------------------------------
+# Kept for backward compatibility with tests that import _validate_similarity
+# ---------------------------------------------------------------------------
+
+def _validate_similarity(M: np.ndarray) -> bool:
+    """
+    Check that the scale encoded in a similarity matrix is within valid range.
+    Kept for test backward-compatibility.
+    """
+    from .constants import SCALE_MIN, SCALE_MAX
+    scale = np.sqrt(M[0, 0] ** 2 + M[1, 0] ** 2)
+    is_valid = SCALE_MIN <= scale <= SCALE_MAX
+    if not is_valid:
+        logger.debug(
+            f"Similarity scale {scale:.3f} outside valid range [{SCALE_MIN}, {SCALE_MAX}]"
         )
-        return None, None
+    return is_valid
 
-    if not _validate_similarity(M_fine):
-        scale = np.sqrt(M_fine[0, 0] ** 2 + M_fine[1, 0] ** 2)
-        logger.warning(
-            f"Fine alignment failed: similarity scale {scale:.3f} outside valid range"
-        )
-        return None, None
 
-    M_total = M_fine @ coarse_matrix
-
-    logger.debug(f"Fine alignment succeeded: inlier_ratio={inlier_ratio:.3f}")
-
-    return M_total, inlier_ratio
-
+# ---------------------------------------------------------------------------
+# Main align function
+# ---------------------------------------------------------------------------
 
 def align(
     cad_edge_map: np.ndarray,
@@ -563,9 +538,9 @@ def align(
 
     cad_edge_map = _validate_inputs(cad_edge_map, real_edge_map)
 
-    final_matrix = None
-    strategy = None
-    inlier_ratio = None
+    final_matrix: np.ndarray
+    strategy: str
+    inlier_ratio: Optional[float] = None
 
     M_coarse = _compute_coarse_transform(cad_edge_map, real_edge_map)
 
@@ -578,38 +553,34 @@ def align(
         strategy = "identity"
     else:
         coarsely_aligned_cad = apply_transform(
-            cad_edge_map,
-            M_coarse,
-            output_shape=real_edge_map.shape
+            cad_edge_map, M_coarse, output_shape=real_edge_map.shape
         )
 
-        H_total, fine_inlier_ratio = _compute_fine_transform(
-            coarsely_aligned_cad,
-            real_edge_map,
-            M_coarse
+        M_fine, fine_inlier_ratio = _compute_fine_transform(
+            coarsely_aligned_cad, real_edge_map, M_coarse
         )
 
-        if H_total is not None:
-            logger.debug("Fine alignment succeeded. Using homography strategy.")
-            final_matrix = H_total
-            strategy = "homography"
-            inlier_ratio = fine_inlier_ratio
+        if M_fine is not None:
+            logger.debug("ECC fine alignment succeeded.")
+            final_matrix = M_fine
+            strategy = "ecc_fine"
+            inlier_ratio = fine_inlier_ratio   # None for ECC
         else:
-            logger.warning("Fine alignment failed. Falling back to coarse affine transform only.")
+            logger.warning(
+                "Fine alignment failed. Falling back to coarse affine transform only."
+            )
             final_matrix = M_coarse
             strategy = "affine_coarse_only"
 
     aligned_image = apply_transform(
-        cad_edge_map,
-        final_matrix,
-        output_shape=real_edge_map.shape
+        cad_edge_map, final_matrix, output_shape=real_edge_map.shape
     )
 
     cad_filled  = _fill_silhouette(aligned_image)
     real_filled = _fill_silhouette(real_edge_map)
 
-    intersection = np.logical_and(cad_filled > 0, real_filled > 0).sum()
-    union        = np.logical_or(cad_filled  > 0, real_filled > 0).sum()
+    intersection    = np.logical_and(cad_filled > 0, real_filled > 0).sum()
+    union           = np.logical_or(cad_filled  > 0, real_filled > 0).sum()
     alignment_score = float(intersection) / float(union) if union > 0 else 0.0
 
     real_area = int((real_filled > 0).sum())
@@ -624,10 +595,8 @@ def align(
             f"Low confidence alignment: score={alignment_score:.4f} < {HIGH_CONFIDENCE_THRESHOLD}"
         )
 
-    inlier_ratio_str = f"{inlier_ratio:.4f}" if inlier_ratio is not None else "N/A"
     logger.debug(
-        f"Alignment complete: strategy={strategy}, score={alignment_score:.4f}, "
-        f"inlier_ratio={inlier_ratio_str}"
+        f"Alignment complete: strategy={strategy}, score={alignment_score:.4f}"
     )
 
     return AlignmentResult(
@@ -638,9 +607,13 @@ def align(
         strategy=strategy,
         high_confidence=high_confidence,
         identified=identified,
-        inlier_ratio=inlier_ratio
+        inlier_ratio=inlier_ratio,
     )
 
+
+# ---------------------------------------------------------------------------
+# Transform application
+# ---------------------------------------------------------------------------
 
 def apply_transform(
     edge_map: np.ndarray,
@@ -649,18 +622,19 @@ def apply_transform(
 ) -> np.ndarray:
     if output_shape is None:
         output_shape = edge_map.shape
-
-    transformed = cv2.warpPerspective(
+    return cv2.warpPerspective(
         edge_map,
         matrix,
         (output_shape[1], output_shape[0]),
         flags=cv2.INTER_LINEAR,
         borderMode=cv2.BORDER_CONSTANT,
-        borderValue=0
+        borderValue=0,
     )
 
-    return transformed
 
+# ---------------------------------------------------------------------------
+# Template matching helper
+# ---------------------------------------------------------------------------
 
 @dataclass
 class TemplateMatch:
@@ -674,8 +648,9 @@ def match_best_template(
     real_edge_map: np.ndarray,
 ) -> list[TemplateMatch]:
     if not templates:
-        raise ValueError("templates list is empty — provide at least one (name, cad_edge_map) pair")
-
+        raise ValueError(
+            "templates list is empty — provide at least one (name, cad_edge_map) pair"
+        )
     results = []
     for name, cad_edge_map in templates:
         logger.debug(f"Aligning template '{name}'...")
@@ -685,9 +660,7 @@ def match_best_template(
             f"Template '{name}': coverage={result.coverage:.4f}, "
             f"iou={result.alignment_score:.4f}, strategy={result.strategy}"
         )
-
     results.sort(key=lambda x: x[1].coverage, reverse=True)
-
     return [
         TemplateMatch(name=name, result=result, rank=i + 1)
         for i, (name, result) in enumerate(results)

@@ -286,6 +286,17 @@ def _match_rects(
 # Public API
 # ---------------------------------------------------------------------------
 
+def _resolution_pos_tol(gray: np.ndarray) -> float:
+    """
+    Compute a position tolerance (px) that scales with image resolution.
+    Keeps tolerance proportional to image diagonal: ~4% of diagonal,
+    clamped to [20, 80] px.
+    """
+    h, w = gray.shape[:2]
+    diag = math.hypot(h, w)
+    return max(20.0, min(80.0, diag * 0.04))
+
+
 def match_features(
     cad_features: CADFeatureSet,
     real_gray: np.ndarray,
@@ -322,6 +333,11 @@ def match_features(
     px_scale = total_scale if total_scale > 0 else scale_px_per_mm
 
     pairs: list[MatchedPair] = []
+
+    # Resolution-aware position tolerance (used in existing_verification path too)
+    img_diag = math.hypot(real_gray.shape[0], real_gray.shape[1])
+    pos_tol_px = max(20.0, min(80.0, img_diag * 0.04))
+    logger.debug(f"match_features: pos_tol_px={pos_tol_px:.1f} (img_diag={img_diag:.1f})")
 
     # ── Fast path: reuse existing Stage-2 verification results ───────────
     if existing_verification:
@@ -437,13 +453,20 @@ def match_features(
         for r in cad_features.rects
     ]
 
+    # Resolution-aware position tolerance
+    img_diag = math.hypot(real_gray.shape[0], real_gray.shape[1])
+    pos_tol_px = max(20.0, min(80.0, img_diag * 0.04))
+    logger.debug(f"Resolution-aware pos_tol_px={pos_tol_px:.1f} (img_diag={img_diag:.1f})")
+
     circle_pairs = _match_circles(
         cad_features.raw_circles, img_circles,
         M_cad2img, scale_px_per_mm,
+        pos_tol_px=pos_tol_px,
     )
     rect_pairs = _match_rects(
         raw_rects, img_rects,
         M_cad2img, scale_px_per_mm,
+        pos_tol_px=pos_tol_px,
     )
 
     pairs = circle_pairs + rect_pairs

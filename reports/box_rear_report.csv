@@ -1,5 +1,5 @@
-feature_name,feature_present,cad_size_px,measured_size_px,deviation_px,tolerance_px,status,unit
-#1 rect cutout_width,YES,141.73,149.0,7.27,5.0,FAIL,px
-#1 rect cutout_height,YES,141.73,149.0,7.27,5.0,FAIL,px
-overall_width,YES,271.88,271.88,0.0,10.0,PASS,px
-overall_height,YES,456.05,456.05,0.0,10.0,PASS,px
+feature_name,feature_present,cad_size_mm,measured_size_mm,deviation_mm,tolerance_mm,status,unit
+#1 rect cutout_width,YES,25.654,25.8844,0.2304,0.3,PASS,mm
+#1 rect cutout_height,YES,25.654,25.1604,-0.4936,0.3,FAIL,mm
+overall_width,NO,49.2125,49.7777,0.5652,1.0,PASS,mm
+overall_height,NO,82.55,81.6355,-0.9145,1.0,PASS,mm

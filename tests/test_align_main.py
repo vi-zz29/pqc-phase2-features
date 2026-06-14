@@ -69,16 +69,17 @@ def test_align_strategy_values():
 
     result = align(cad_map, real_map)
 
-    assert result.strategy in ["homography", "affine_coarse_only", "identity"]
+    assert result.strategy in ["ecc_fine", "affine_coarse_only", "identity"]
 
 
 def test_align_high_confidence_flag():
+    from cad_image_alignment.constants import HIGH_CONFIDENCE_THRESHOLD
     cad_map = create_simple_shape()
     real_map = create_simple_shape()
 
     result = align(cad_map, real_map)
 
-    if result.alignment_score >= 0.60:
+    if result.alignment_score >= HIGH_CONFIDENCE_THRESHOLD:
         assert result.high_confidence is True
     else:
         assert result.high_confidence is False
@@ -103,10 +104,11 @@ def test_align_affine_coarse_only_fallback():
 
     result = align(cad_map, real_map)
 
-    assert result.strategy in ["affine_coarse_only", "homography"]
+    assert result.strategy in ["affine_coarse_only", "ecc_fine"]
 
 
 def test_align_returns_result_even_when_not_high_confidence():
+    from cad_image_alignment.constants import HIGH_CONFIDENCE_THRESHOLD
     cad_map = create_simple_shape()
     real_map = np.zeros((100, 100), dtype=np.uint8)
     real_map[10:30, 10:30] = 255
@@ -115,7 +117,7 @@ def test_align_returns_result_even_when_not_high_confidence():
 
     assert isinstance(result, AlignmentResult)
     if not result.high_confidence:
-        assert result.alignment_score < 0.60
+        assert result.alignment_score < HIGH_CONFIDENCE_THRESHOLD
 
 
 def test_align_logging_on_fallback(caplog):

@@ -2,97 +2,23 @@ import math
 import cv2
 import numpy as np
 from pathlib import Path
+from dimension_analysis.dxf_utils import parse_dxf_raw
 
 OUT_DIR = Path("outputs/hole_visualization")
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
+
 def parse_dxf(path: str):
-    circles, arcs, lines = [], [], []
-
-    with open(path, "r") as f:
-        raw = f.readlines()
-
-    pairs = []
-    i = 0
-    while i + 1 < len(raw):
-        code  = raw[i].strip()
-        value = raw[i + 1].strip()
-        try:
-            pairs.append((int(code), value))
-        except ValueError:
-            pass
-        i += 2
-
-    ent_start = ent_end = None
-    for idx, (code, val) in enumerate(pairs):
-        if code == 2 and val == "ENTITIES":
-            ent_start = idx + 1
-        if ent_start and code == 0 and val == "ENDSEC":
-            ent_end = idx
-            break
-
-    if ent_start is None:
-        return circles, arcs, lines
-
-    entity_pairs = pairs[ent_start:ent_end]
-
-    blocks = []
-    current = None
-    for code, val in entity_pairs:
-        if code == 0:
-            if current is not None:
-                blocks.append(current)
-            current = {"type": val, "data": {}}
-        elif current is not None:
-            current["data"][code] = val
-            if code in (10, 20, 11, 21, 30, 31):
-                current["data"].setdefault(f"_{code}_list", []).append(val)
-
-    if current is not None:
-        blocks.append(current)
-
-    for block in blocks:
-        t = block["type"]
-        d = block["data"]
-
-        def fget(code, default=None):
-            v = d.get(code)
-            if v is None:
-                return default
-            try:
-                return float(v)
-            except ValueError:
-                return default
-
-        if t == "CIRCLE":
-            cx = fget(10)
-            cy = fget(20)
-            r  = fget(40)
-            if cx is not None and cy is not None and r is not None:
-                circles.append({"cx": cx, "cy": cy, "r": r})
-
-        elif t == "ARC":
-            cx      = fget(10)
-            cy      = fget(20)
-            r       = fget(40)
-            a_start = fget(50)
-            a_end   = fget(51)
-            if cx is not None and r is not None:
-                arcs.append({"cx": cx, "cy": cy, "r": r,
-                             "a_start": a_start, "a_end": a_end})
-
-        elif t == "LINE":
-            xs = d.get("_10_list", [])
-            ys = d.get("_20_list", [])
-            x2s = d.get("_11_list", [])
-            y2s = d.get("_21_list", [])
-            x1 = float(xs[0]) if xs else None
-            y1 = float(ys[0]) if ys else None
-            x2 = float(x2s[0]) if x2s else None
-            y2 = float(y2s[0]) if y2s else None
-            if x1 is not None and x2 is not None:
-                lines.append({"x1": x1, "y1": y1, "x2": x2, "y2": y2})
-
+    """
+    Thin wrapper — delegates to shared dxf_utils parser.
+    Note: arcs returned have keys 'a0'/'a1'; callers that used
+    'a_start'/'a_end' keys from the old parser are updated below.
+    """
+    circles, arcs, lines = parse_dxf_raw(path)
+    # Normalise arc key names for backward compat with draw_dxf()
+    for a in arcs:
+        a.setdefault("a_start", a.get("a0", 0))
+        a.setdefault("a_end",   a.get("a1", 360))
     return circles, arcs, lines
 
 
@@ -297,6 +223,6 @@ def process(dxf_path, label, out_prefix):
 
 
 if __name__ == "__main__":
-    process("dxf/circular_front.dxf", "Front View",  "front")
+    process("dxf/circular_rear.dxf", "Front View",  "front")
     process("dxf/circular_rear.dxf",  "Rear View",   "rear")
     print(f"\nDone. Check: {OUT_DIR.resolve()}")

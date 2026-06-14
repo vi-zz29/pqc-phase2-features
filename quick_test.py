@@ -35,6 +35,7 @@ from dimension_analysis import (
     verify_tolerances,
     generate_reports,
 )
+from dimension_analysis.dxf_utils import parse_dxf_raw
 
 # ---------------------------------------------------------------------------
 # Logging setup
@@ -95,56 +96,29 @@ def preprocess_real(img: np.ndarray) -> tuple:
 
 
 def parse_dxf_circles(path: Path) -> list[dict]:
-    circles = []
-    with open(str(path), "r") as f:
-        raw = f.readlines()
-    pairs = []
-    i = 0
-    while i + 1 < len(raw):
-        try:
-            pairs.append((int(raw[i].strip()), raw[i + 1].strip()))
-        except ValueError:
-            pass
-        i += 2
-    ent_start = ent_end = None
-    for idx, (code, val) in enumerate(pairs):
-        if code == 2 and val == "ENTITIES":
-            ent_start = idx + 1
-        if ent_start and code == 0 and val == "ENDSEC":
-            ent_end = idx
-            break
-    if ent_start is None:
-        return circles
-    blocks = []
-    current = None
-    for code, val in pairs[ent_start:ent_end]:
-        if code == 0:
-            if current is not None:
-                blocks.append(current)
-            current = {"type": val, "data": {}}
-        elif current is not None:
-            current["data"][code] = val
-    if current is not None:
-        blocks.append(current)
-    for block in blocks:
-        if block["type"] != "CIRCLE":
-            continue
-        d = block["data"]
-        try:
-            circles.append({"cx": float(d[10]), "cy": float(d[20]), "r": float(d[40])})
-        except (KeyError, ValueError):
-            pass
+    """Parse CIRCLE entities from a DXF file. Delegates to shared dxf_utils."""
+    circles, _, _ = parse_dxf_raw(path)
     return circles
 
 
 def get_holes_for_view(circles: list[dict], view: str) -> list[dict]:
+    """
+    Return bolt holes and the centre hole from the DXF circle list.
+    All circles whose centre is within DXF_CENTER_TOL of the part centre are
+    excluded from the bolt-hole list — they are concentric rings (outer diameter,
+    grooves, center bore). Previously only r≈14.5 was excluded, which caused
+    center-bore circles to appear as bolt holes AND be re-measured as center_bore.
+    """
     holes = []
     center_hole = None
     for c in circles:
         dist = math.hypot(c["cx"] - DXF_CENTER_CX, c["cy"] - DXF_CENTER_CY)
         if dist < DXF_CENTER_TOL:
+            # ALL concentric circles are excluded from bolt holes.
+            # Keep only the known center-through-bore for verification.
             if abs(c["r"] - 14.5) < 0.1:
                 center_hole = c
+            # Other concentric circles (outer ring, grooves) are silently skipped.
             continue
         if view in ("front", "top"):
             if abs(c["cx"] - 152.16) < 0.5 and abs(c["cy"] - 63.16) < 0.5:
@@ -253,33 +227,51 @@ def compute_M_cad2edge(cad_edge_map: np.ndarray,
 def check_hole_in_image(real_gray: np.ndarray,
                         cx_px: int, cy_px: int, r_px: int,
                         search_margin: int = 6) -> tuple[bool, float]:
+    """
+    Check whether a hole exists at (cx_px, cy_px) with radius r_px.
+
+    Strategy: try the projected centre first, then jitter ±search_offset
+    to handle small projection errors from coarse-only alignment.
+    Returns (found, best_ratio).
+    """
     h, w = real_gray.shape
-    if cx_px < 0 or cy_px < 0 or cx_px >= w or cy_px >= h:
-        return False, 1.0
 
     r_inner = max(2, r_px)
-    r_outer = r_inner + search_margin
+    # Scale annulus margin with hole size to avoid bleeding into adjacent features
+    adaptive_margin = max(4, int(r_inner * 0.4))
+    r_outer = r_inner + adaptive_margin
 
-    Y, X = np.ogrid[:h, :w]
-    dist_sq = (X - cx_px) ** 2 + (Y - cy_px) ** 2
-    inner_mask   = dist_sq <= r_inner ** 2
-    annulus_mask = (dist_sq > r_inner ** 2) & (dist_sq <= r_outer ** 2)
+    def _ratio_at(cx: int, cy: int) -> float:
+        if cx < 0 or cy < 0 or cx >= w or cy >= h:
+            return 1.0
+        Y, X = np.ogrid[:h, :w]
+        dist_sq = (X - cx) ** 2 + (Y - cy) ** 2
+        inner_mask   = dist_sq <= r_inner ** 2
+        annulus_mask = (dist_sq > r_inner ** 2) & (dist_sq <= r_outer ** 2)
+        inner_px   = real_gray[inner_mask]
+        annulus_px = real_gray[annulus_mask]
+        if inner_px.size == 0 or annulus_px.size == 0:
+            return 1.0
+        mean_annulus = float(annulus_px.mean())
+        if mean_annulus < 1.0:
+            return 1.0
+        return float(inner_px.mean()) / mean_annulus
 
-    inner_px   = real_gray[inner_mask]
-    annulus_px = real_gray[annulus_mask]
+    # Neighbourhood search: jitter up to ±search_offset pixels around projection
+    # This compensates for positional error in coarse-only alignment.
+    search_offset = max(4, r_inner // 2)
+    best_ratio = _ratio_at(cx_px, cy_px)
+    for dx in range(-search_offset, search_offset + 1, max(1, search_offset // 2)):
+        for dy in range(-search_offset, search_offset + 1, max(1, search_offset // 2)):
+            if dx == 0 and dy == 0:
+                continue
+            r = _ratio_at(cx_px + dx, cy_px + dy)
+            # Keep the ratio that is furthest from 1.0 (strongest hole signal)
+            if abs(r - 1.0) > abs(best_ratio - 1.0):
+                best_ratio = r
 
-    if inner_px.size == 0 or annulus_px.size == 0:
-        return False, 1.0
-
-    mean_inner   = float(inner_px.mean())
-    mean_annulus = float(annulus_px.mean())
-    if mean_annulus < 1.0:
-        return False, 1.0
-
-    ratio = mean_inner / mean_annulus
-    # Bug 4 fix: lowered detection threshold from 1.20/0.80 to 1.05/0.90
-    # so that shallow contrast holes (ratio≈0.99 was being missed) are caught.
-    return (ratio > 1.05 or ratio < 0.90), ratio
+    # Decision: bright hole (reflection) or dark hole (bore)
+    return (best_ratio > 1.15 or best_ratio < 0.88), best_ratio
 
 
 def check_rect_in_image(real_gray: np.ndarray,
@@ -601,7 +593,11 @@ def _run_dimension_pipeline(
         transform_result = estimate_transform(
             matched_pairs=matched_pairs,
             M_initial=M_cad2img,
-            scale_initial=scale_px_per_mm,
+            # Pass total_scale (DXF-mm → image-px) not just blueprint scale.
+            # This makes the scale-mismatch warning meaningful: if Stage 5
+            # refits to something very different from total_scale, the warning
+            # correctly flags a problem rather than always firing due to unit mismatch.
+            scale_initial=total_scale if total_scale > 0 else scale_px_per_mm,
         )
         PASS(
             f"Transformation Estimation  "
@@ -620,6 +616,7 @@ def _run_dimension_pipeline(
             matched_pairs=matched_pairs,
             cad_features=cad_features,
             transform_result=transform_result,
+            real_gray=real,
         )
         if not measured_features:
             FAIL("Dimension Recovery", "No dimensions could be recovered")

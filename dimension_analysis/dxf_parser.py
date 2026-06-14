@@ -254,7 +254,12 @@ def _extract_circular_features(
     part_cx = float(np.median(cx_vals))
     part_cy = float(np.median(cy_vals))
 
-    CENTER_TOL = 3.0  # mm
+    # Use 2% of the largest circle radius as center tolerance (min 1mm, max 5mm)
+    if all_circles:
+        max_r = max(c["r"] for c in all_circles)
+        CENTER_TOL = max(1.0, min(5.0, max_r * 0.02))
+    else:
+        CENTER_TOL = 3.0
 
     concentric = [c for c in all_circles
                   if math.hypot(c["cx"] - part_cx, c["cy"] - part_cy) < CENTER_TOL]
@@ -335,7 +340,9 @@ def _extract_rectangular_features(
     overall_height = max_y - min_y
 
     # Holes = CIRCLE entities (small radius)
-    hole_circles = [c for c in circles if c["r"] < 20.0]
+    # Use 15% of the smaller dimension as max hole radius (avoids fragile hard-coded 20mm)
+    max_hole_r = min(overall_width, overall_height) * 0.15
+    hole_circles = [c for c in circles if c["r"] < max_hole_r]
     hole_diameters = sorted(set(round(c["r"] * 2.0, 4) for c in hole_circles))
     hole_positions_list = [(c["cx"], c["cy"]) for c in hole_circles]
     hole_count = len(hole_circles)

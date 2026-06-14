@@ -1,6 +1,7 @@
 import math, cv2, numpy as np
 from pathlib import Path
 from collections import defaultdict
+from dimension_analysis.dxf_utils import parse_dxf_raw
 
 OUT = Path("outputs/box_inspection")
 OUT.mkdir(parents=True, exist_ok=True)
@@ -10,55 +11,8 @@ PAD  = 60
 
 
 def parse_dxf_all(path):
-    circles, arcs, lines = [], [], []
-    with open(path) as f:
-        raw = f.readlines()
-    pairs = []
-    i = 0
-    while i + 1 < len(raw):
-        try:
-            pairs.append((int(raw[i].strip()), raw[i+1].strip()))
-        except:
-            pass
-        i += 2
-    ent_start = ent_end = None
-    for idx, (code, val) in enumerate(pairs):
-        if code == 2 and val == "ENTITIES":
-            ent_start = idx + 1
-        if ent_start and code == 0 and val == "ENDSEC":
-            ent_end = idx
-            break
-    if not ent_start:
-        return circles, arcs, lines
-    blocks = []
-    current = None
-    for code, val in pairs[ent_start:ent_end]:
-        if code == 0:
-            if current:
-                blocks.append(current)
-            current = {"type": val, "data": {}}
-        elif current:
-            current["data"][code] = val
-    if current:
-        blocks.append(current)
-    for b in blocks:
-        d = b["data"]
-        try:
-            if b["type"] == "CIRCLE":
-                circles.append({"cx": float(d[10]), "cy": float(d[20]), "r": float(d[40])})
-            elif b["type"] == "ARC":
-                arcs.append({
-                    "cx": float(d[10]), "cy": float(d[20]), "r": float(d[40]),
-                    "a0": float(d.get(50, 0)), "a1": float(d.get(51, 360))
-                })
-            elif b["type"] == "LINE":
-                lines.append({
-                    "x1": float(d[10]), "y1": float(d[20]),
-                    "x2": float(d[11]), "y2": float(d[21])
-                })
-        except:
-            pass
-    return circles, arcs, lines
+    """Thin wrapper — delegates to shared dxf_utils parser."""
+    return parse_dxf_raw(path)
 
 
 def make_transform(circles, arcs, lines):

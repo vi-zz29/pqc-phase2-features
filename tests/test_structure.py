@@ -44,7 +44,7 @@ def test_align_basic_functionality():
     assert result.transform_matrix.shape == (3, 3)
     assert result.transform_matrix.dtype == np.float64
     assert 0.0 <= result.alignment_score <= 1.0
-    assert result.strategy in ["homography", "affine_coarse_only", "identity"]
+    assert result.strategy in ["ecc_fine", "homography", "affine_coarse_only", "identity"]
     assert isinstance(result.high_confidence, bool)
     assert result.inlier_ratio is None or isinstance(result.inlier_ratio, float)
 

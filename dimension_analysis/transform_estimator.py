@@ -131,6 +131,23 @@ def estimate_transform(
         f"rotation={angle:.2f}°, tx={tx:.1f}, ty={ty:.1f}, "
         f"reprojection_error={mean_err:.2f} px"
     )
+    if abs(scale - scale_initial) / max(scale_initial, 1e-6) > 0.25:
+        logger.warning(
+            f"Scale mismatch: initial scale={scale_initial:.4f} px/mm, "
+            f"refined scale={scale:.4f} px/mm "
+            f"({abs(scale-scale_initial)/scale_initial*100:.1f}% difference). "
+            f"Clamping refined scale to initial to prevent measurement corruption. "
+            f"This will self-correct once the clamp fixture is added."
+        )
+        # Clamp: replace the refitted scale component with the known initial scale
+        # while keeping the rotation and translation from the fit.
+        # This prevents a bad feature position estimate from corrupting mm measurements.
+        ratio = scale_initial / scale if scale > 0 else 1.0
+        M3x3[0, 0] *= ratio
+        M3x3[1, 0] *= ratio
+        M3x3[0, 1] *= ratio
+        M3x3[1, 1] *= ratio
+        scale = scale_initial
 
     return TransformResult(
         matrix=M3x3,

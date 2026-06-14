@@ -1,11 +1,11 @@
 """
 Inspection Report Generator — Stage 8.
 
-All dimensions are in PIXELS. No mm conversion anywhere.
+All dimensions are in MILLIMETRES.
 
 Output artefacts:
-  reports/<stem>_report.csv   — tabular, pixel columns
-  reports/<stem>_report.json  — structured, pixel columns
+  reports/<stem>_report.csv   — tabular, mm columns
+  reports/<stem>_report.json  — structured, mm columns
   reports/<stem>_report.png   — full composite inspection image
 
 The PNG layout:
@@ -77,10 +77,10 @@ def _build_record(tr: ToleranceResult, present: bool) -> dict:
     return {
         "feature_name":        tr.label,
         "feature_present":     "YES" if present else "NO",
-        "cad_size_px":         round(tr.cad_dimension_mm,      2),
-        "measured_size_px":    round(tr.measured_dimension_mm, 2),
-        "deviation_px":        round(tr.deviation_mm,          2),
-        "tolerance_px":        round(tr.tolerance_mm,          2),
+        "cad_size_mm":         round(tr.cad_dimension_mm,      4),
+        "measured_size_mm":    round(tr.measured_dimension_mm, 4),
+        "deviation_mm":        round(tr.deviation_mm,          4),
+        "tolerance_mm":        round(tr.tolerance_mm,          4),
         "status":              tr.status,
         "unit":                tr.unit,
     }
@@ -261,14 +261,14 @@ def _build_visual_report(
                             (180, 180, 60), 1, cv2.LINE_AA)
 
             # Callout box
-            meas_r  = float(pair.image_value_px) * scale_vis
-            cad_r_  = float(pair.cad_value_mm) * pair.scale_px_per_mm * scale_vis
+            meas_r  = float(pair.image_value_px) / pair.scale_px_per_mm if pair.scale_px_per_mm > 0 else 0.0
+            cad_r_  = float(pair.cad_value_mm)
             dev_r   = meas_r - cad_r_
             lines = [
                 (f"#{idx} {pair.label}", _C_CALLOUT),
-                (f"CAD  r={cad_r_:.1f}px", (160, 160, 160)),
-                (f"Meas r={meas_r:.1f}px", _C_TEXT),
-                (f"Dev  {dev_r:+.1f}px", color),
+                (f"CAD  r={cad_r_:.3f}mm", (160, 160, 160)),
+                (f"Meas r={meas_r:.3f}mm", _C_TEXT),
+                (f"Dev  {dev_r:+.3f}mm", color),
             ]
             _callout_box(photo, lines, cx, cy - r - 4, color)
             _draw_index_dot(photo, idx, cx, cy, color)
@@ -309,15 +309,15 @@ def _build_visual_report(
                              (180, 180, 60), 1, cv2.LINE_AA)
 
             # Callout
-            mw = img_wh[0] * scale_vis
-            mh = img_wh[1] * scale_vis
-            cw = float(pair.cad_value_mm[0]) * pair.scale_px_per_mm * scale_vis
-            ch = float(pair.cad_value_mm[1]) * pair.scale_px_per_mm * scale_vis
+            mw = float(img_wh[0]) / pair.scale_px_per_mm if pair.scale_px_per_mm > 0 else 0.0
+            mh = float(img_wh[1]) / pair.scale_px_per_mm if pair.scale_px_per_mm > 0 else 0.0
+            cw = float(pair.cad_value_mm[0])
+            ch = float(pair.cad_value_mm[1])
             lines = [
                 (f"#{idx} {pair.label}", _C_CALLOUT),
-                (f"CAD  {cw:.1f}x{ch:.1f}px", (160, 160, 160)),
-                (f"Meas {mw:.1f}x{mh:.1f}px", _C_TEXT),
-                (f"dW={mw-cw:+.1f}  dH={mh-ch:+.1f}px", color),
+                (f"CAD  {cw:.2f}x{ch:.2f}mm", (160, 160, 160)),
+                (f"Meas {mw:.2f}x{mh:.2f}mm", _C_TEXT),
+                (f"dW={mw-cw:+.2f}  dH={mh-ch:+.2f}mm", color),
             ]
             _callout_box(photo, lines, cx + hw + 4, cy, color)
             _draw_index_dot(photo, idx, cx, cy, color)
@@ -334,6 +334,7 @@ def _build_visual_report(
     _put(hdr, f"Score:{alignment_score:.3f}",            380, 20, (180,180,180), _FM)
     _put(hdr, f"Cov:{coverage:.1%}",                     510, 20, (180,180,180), _FM)
     _put(hdr, f"Scale:{scale_px_per_mm:.2f}px/mm",       620, 20, (180,180,180), _FM)
+    _put(hdr, f"Units: mm",                              750, 20, (180,180,180), _FS)
     _put(hdr, f"{overall_str}  {pass_count}P/{fail_count}F",
          380, 40, ov_col, _FM, _TH2)
 
@@ -369,7 +370,7 @@ def _build_visual_report(
 
     # Panel title
     y = PAD + 16
-    _put(leg, "DIMENSION REPORT  (pixels)", PAD, y, _C_TEXT, _FM, _TH2)
+    _put(leg, "DIMENSION REPORT  (mm)", PAD, y, _C_TEXT, _FM, _TH2)
     y += 6
     cv2.line(leg, (PAD, y), (LEG_W - PAD, y), _C_GRID, 1)
     y += ROW_H
@@ -405,10 +406,10 @@ def _build_visual_report(
         idx_str = str(feature_index.get(p.label, "-")) if p else "-"
 
         name = tr.label[:22]
-        cad  = f"{tr.cad_dimension_mm:.1f}"
-        meas = f"{tr.measured_dimension_mm:.1f}"
-        dev  = f"{tr.deviation_mm:+.1f}"
-        tol  = f"+-{tr.tolerance_mm:.0f}"
+        cad  = f"{tr.cad_dimension_mm:.3f}"
+        meas = f"{tr.measured_dimension_mm:.3f}"
+        dev  = f"{tr.deviation_mm:+.3f}"
+        tol  = f"+-{tr.tolerance_mm:.2f}"
 
         _put(leg, idx_str,  x0,                             y, (160,160,160), _FS)
         _put(leg, name,     x0+C_IDX,                       y, _C_TEXT,       _FS)
@@ -478,10 +479,11 @@ def generate_reports(
     matched_labels = {p.label for p in matched_pairs}
     records = []
     for tr in tolerance_results:
-        is_matched = tr.label in matched_labels or any(
+        # Feature is present only if it was genuinely matched — never fall back
+        # to deviation==0 as a proxy (that was a tautological artefact).
+        present = tr.label in matched_labels or any(
             tr.label.startswith(p.label) for p in matched_pairs
         )
-        present = is_matched or tr.deviation_mm == 0.0
         records.append(_build_record(tr, present))
 
     pass_count = sum(1 for r in records if r["status"] == "PASS")
@@ -503,7 +505,7 @@ def generate_reports(
             "pass_count":      pass_count,
             "fail_count":      fail_count,
             "overall_status":  overall,
-            "units":           "pixels",
+            "units":           "mm",
         },
         "features": records,
     }
@@ -532,15 +534,15 @@ def generate_reports(
     # Console — ASCII only (Windows cmd safe)
     SEP = "-" * 76
     print(f"\n{SEP}")
-    print(f"  INSPECTION REPORT (pixels)  --  {image_stem}  ->  {identified_as}")
+    print(f"  INSPECTION REPORT (mm)  --  {image_stem}  ->  {identified_as}")
     print(SEP)
     print(f"  Timestamp : {timestamp}")
     print(f"  Score     : {alignment_score:.4f}   Coverage: {coverage:.1%}")
-    print(f"  Scale ref : {scale_px_per_mm:.4f} px/mm  (info only)")
+    print(f"  Scale ref : {scale_px_per_mm:.4f} px/mm")
     print(f"  Features  : {total}   PASS: {pass_count}   FAIL: {fail_count}")
     print(SEP)
-    print(f"  {'Feature':<28} {'Present':<8} {'CAD px':>8} {'Meas px':>8} "
-          f"{'Dev px':>8} {'Tol px':>7}  Status")
+    print(f"  {'Feature':<28} {'Present':<8} {'CAD mm':>8} {'Meas mm':>8} "
+          f"{'Dev mm':>8} {'Tol mm':>7}  Status")
     print(f"  {'-'*72}")
 
     for r in records:
@@ -548,10 +550,10 @@ def generate_reports(
         print(
             f"  {r['feature_name']:<28} "
             f"{r['feature_present']:<8} "
-            f"{r['cad_size_px']:>8.1f} "
-            f"{r['measured_size_px']:>8.1f} "
-            f"{r['deviation_px']:>+8.1f} "
-            f"{r['tolerance_px']:>7.1f}  "
+            f"{r['cad_size_mm']:>8.3f} "
+            f"{r['measured_size_mm']:>8.3f} "
+            f"{r['deviation_mm']:>+8.3f} "
+            f"{r['tolerance_mm']:>7.3f}  "
             f"{tag}"
         )
 
