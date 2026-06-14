@@ -248,15 +248,17 @@ def _extract_circular_features(
     if not all_circles:
         raise ValueError("No circle entities found for circular part")
 
-    # Use median centre as part centre
-    cx_vals = [c["cx"] for c in all_circles]
-    cy_vals = [c["cy"] for c in all_circles]
-    part_cx = float(np.median(cx_vals))
-    part_cy = float(np.median(cy_vals))
+    # Find the part centre — use the centre of the largest circle (by radius)
+    # rather than median of all circles. The median is dragged off-centre by
+    # bolt holes whose positions scatter around the part, giving the wrong anchor
+    # for the concentric/peripheral classification.
+    sorted_by_r = sorted(all_circles, key=lambda c: c["r"], reverse=True)
+    part_cx = sorted_by_r[0]["cx"]
+    part_cy = sorted_by_r[0]["cy"]
 
     # Use 2% of the largest circle radius as center tolerance (min 1mm, max 5mm)
     if all_circles:
-        max_r = max(c["r"] for c in all_circles)
+        max_r = sorted_by_r[0]["r"]
         CENTER_TOL = max(1.0, min(5.0, max_r * 0.02))
     else:
         CENTER_TOL = 3.0

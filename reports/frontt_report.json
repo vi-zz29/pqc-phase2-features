@@ -1,6 +1,6 @@
 {
   "report_metadata": {
-    "timestamp": "2026-06-14T12:41:55",
+    "timestamp": "2026-06-15T01:54:10",
     "image": "frontt",
     "identified_as": "circular_top",
     "alignment_score": 0.6362,
@@ -8,391 +8,275 @@
     "strategy": "ecc_fine",
     "scale_px_per_mm": 3.5119,
     "total_features": 38,
-    "pass_count": 14,
-    "fail_count": 24,
-    "overall_status": "FAIL",
-    "units": "mm"
+    "units": "px",
+    "evaluation": "disabled (pre-clamp prototype)"
   },
   "features": [
     {
       "feature_name": "hole #1",
       "feature_present": "YES",
-      "cad_size_mm": 2.25,
-      "measured_size_mm": 2.4601,
-      "deviation_mm": 0.2101,
-      "tolerance_mm": 0.1,
-      "status": "FAIL",
-      "unit": "mm (radius)"
+      "cad_size_px": 7.9,
+      "measured_size_px": 8.64,
+      "deviation_px": 0.74
     },
     {
       "feature_name": "hole #1_dia",
       "feature_present": "YES",
-      "cad_size_mm": 4.5,
-      "measured_size_mm": 4.9202,
-      "deviation_mm": 0.4202,
-      "tolerance_mm": 0.2,
-      "status": "FAIL",
-      "unit": "mm (diameter)"
+      "cad_size_px": 15.8,
+      "measured_size_px": 17.28,
+      "deviation_px": 1.48
     },
     {
       "feature_name": "hole #2",
       "feature_present": "YES",
-      "cad_size_mm": 1.65,
-      "measured_size_mm": 1.7312,
-      "deviation_mm": 0.0812,
-      "tolerance_mm": 0.1,
-      "status": "PASS",
-      "unit": "mm (radius)"
+      "cad_size_px": 5.79,
+      "measured_size_px": 6.08,
+      "deviation_px": 0.29
     },
     {
       "feature_name": "hole #2_dia",
       "feature_present": "YES",
-      "cad_size_mm": 3.3,
-      "measured_size_mm": 3.4624,
-      "deviation_mm": 0.1624,
-      "tolerance_mm": 0.2,
-      "status": "PASS",
-      "unit": "mm (diameter)"
+      "cad_size_px": 11.59,
+      "measured_size_px": 12.16,
+      "deviation_px": 0.57
     },
     {
       "feature_name": "hole #3",
       "feature_present": "YES",
-      "cad_size_mm": 1.65,
-      "measured_size_mm": 1.7995,
-      "deviation_mm": 0.1495,
-      "tolerance_mm": 0.1,
-      "status": "FAIL",
-      "unit": "mm (radius)"
+      "cad_size_px": 5.79,
+      "measured_size_px": 6.32,
+      "deviation_px": 0.53
     },
     {
       "feature_name": "hole #3_dia",
       "feature_present": "YES",
-      "cad_size_mm": 3.3,
-      "measured_size_mm": 3.5991,
-      "deviation_mm": 0.2991,
-      "tolerance_mm": 0.2,
-      "status": "FAIL",
-      "unit": "mm (diameter)"
+      "cad_size_px": 11.59,
+      "measured_size_px": 12.64,
+      "deviation_px": 1.05
     },
     {
       "feature_name": "hole #4",
       "feature_present": "YES",
-      "cad_size_mm": 1.65,
-      "measured_size_mm": 1.7312,
-      "deviation_mm": 0.0812,
-      "tolerance_mm": 0.1,
-      "status": "PASS",
-      "unit": "mm (radius)"
+      "cad_size_px": 5.79,
+      "measured_size_px": 6.08,
+      "deviation_px": 0.29
     },
     {
       "feature_name": "hole #4_dia",
       "feature_present": "YES",
-      "cad_size_mm": 3.3,
-      "measured_size_mm": 3.4624,
-      "deviation_mm": 0.1624,
-      "tolerance_mm": 0.2,
-      "status": "PASS",
-      "unit": "mm (diameter)"
+      "cad_size_px": 11.59,
+      "measured_size_px": 12.16,
+      "deviation_px": 0.57
     },
     {
       "feature_name": "hole #5",
       "feature_present": "YES",
-      "cad_size_mm": 2.25,
-      "measured_size_mm": 2.7335,
-      "deviation_mm": 0.4835,
-      "tolerance_mm": 0.1,
-      "status": "FAIL",
-      "unit": "mm (radius)"
+      "cad_size_px": 7.9,
+      "measured_size_px": 9.6,
+      "deviation_px": 1.7
     },
     {
       "feature_name": "hole #5_dia",
       "feature_present": "YES",
-      "cad_size_mm": 4.5,
-      "measured_size_mm": 5.4669,
-      "deviation_mm": 0.9669,
-      "tolerance_mm": 0.2,
-      "status": "FAIL",
-      "unit": "mm (diameter)"
+      "cad_size_px": 15.8,
+      "measured_size_px": 19.2,
+      "deviation_px": 3.4
     },
     {
       "feature_name": "hole #6",
       "feature_present": "YES",
-      "cad_size_mm": 2.25,
-      "measured_size_mm": 2.3234,
-      "deviation_mm": 0.0734,
-      "tolerance_mm": 0.1,
-      "status": "PASS",
-      "unit": "mm (radius)"
+      "cad_size_px": 7.9,
+      "measured_size_px": 8.16,
+      "deviation_px": 0.26
     },
     {
       "feature_name": "hole #6_dia",
       "feature_present": "YES",
-      "cad_size_mm": 4.5,
-      "measured_size_mm": 4.6469,
-      "deviation_mm": 0.1469,
-      "tolerance_mm": 0.2,
-      "status": "PASS",
-      "unit": "mm (diameter)"
+      "cad_size_px": 15.8,
+      "measured_size_px": 16.32,
+      "deviation_px": 0.52
     },
     {
       "feature_name": "hole #7",
       "feature_present": "YES",
-      "cad_size_mm": 2.6,
-      "measured_size_mm": 2.8132,
-      "deviation_mm": 0.2132,
-      "tolerance_mm": 0.1,
-      "status": "FAIL",
-      "unit": "mm (radius)"
+      "cad_size_px": 9.13,
+      "measured_size_px": 9.88,
+      "deviation_px": 0.75
     },
     {
       "feature_name": "hole #7_dia",
       "feature_present": "YES",
-      "cad_size_mm": 5.2,
-      "measured_size_mm": 5.6264,
-      "deviation_mm": 0.4264,
-      "tolerance_mm": 0.2,
-      "status": "FAIL",
-      "unit": "mm (diameter)"
+      "cad_size_px": 18.26,
+      "measured_size_px": 19.76,
+      "deviation_px": 1.5
     },
     {
       "feature_name": "hole #8",
       "feature_present": "YES",
-      "cad_size_mm": 2.6,
-      "measured_size_mm": 2.8474,
-      "deviation_mm": 0.2474,
-      "tolerance_mm": 0.1,
-      "status": "FAIL",
-      "unit": "mm (radius)"
+      "cad_size_px": 9.13,
+      "measured_size_px": 10.0,
+      "deviation_px": 0.87
     },
     {
       "feature_name": "hole #8_dia",
       "feature_present": "YES",
-      "cad_size_mm": 5.2,
-      "measured_size_mm": 5.6947,
-      "deviation_mm": 0.4947,
-      "tolerance_mm": 0.2,
-      "status": "FAIL",
-      "unit": "mm (diameter)"
+      "cad_size_px": 18.26,
+      "measured_size_px": 20.0,
+      "deviation_px": 1.74
     },
     {
       "feature_name": "hole #9",
       "feature_present": "YES",
-      "cad_size_mm": 2.6,
-      "measured_size_mm": 2.8815,
-      "deviation_mm": 0.2815,
-      "tolerance_mm": 0.1,
-      "status": "FAIL",
-      "unit": "mm (radius)"
+      "cad_size_px": 9.13,
+      "measured_size_px": 10.12,
+      "deviation_px": 0.99
     },
     {
       "feature_name": "hole #9_dia",
       "feature_present": "YES",
-      "cad_size_mm": 5.2,
-      "measured_size_mm": 5.763,
-      "deviation_mm": 0.563,
-      "tolerance_mm": 0.2,
-      "status": "FAIL",
-      "unit": "mm (diameter)"
+      "cad_size_px": 18.26,
+      "measured_size_px": 20.24,
+      "deviation_px": 1.98
     },
     {
       "feature_name": "hole #10",
       "feature_present": "YES",
-      "cad_size_mm": 2.6,
-      "measured_size_mm": 2.6423,
-      "deviation_mm": 0.0423,
-      "tolerance_mm": 0.1,
-      "status": "PASS",
-      "unit": "mm (radius)"
+      "cad_size_px": 9.13,
+      "measured_size_px": 9.28,
+      "deviation_px": 0.15
     },
     {
       "feature_name": "hole #10_dia",
       "feature_present": "YES",
-      "cad_size_mm": 5.2,
-      "measured_size_mm": 5.2847,
-      "deviation_mm": 0.0847,
-      "tolerance_mm": 0.2,
-      "status": "PASS",
-      "unit": "mm (diameter)"
+      "cad_size_px": 18.26,
+      "measured_size_px": 18.56,
+      "deviation_px": 0.3
     },
     {
       "feature_name": "hole #11",
       "feature_present": "YES",
-      "cad_size_mm": 2.6,
-      "measured_size_mm": 2.7107,
-      "deviation_mm": 0.1107,
-      "tolerance_mm": 0.1,
-      "status": "FAIL",
-      "unit": "mm (radius)"
+      "cad_size_px": 9.13,
+      "measured_size_px": 9.52,
+      "deviation_px": 0.39
     },
     {
       "feature_name": "hole #11_dia",
       "feature_present": "YES",
-      "cad_size_mm": 5.2,
-      "measured_size_mm": 5.4214,
-      "deviation_mm": 0.2214,
-      "tolerance_mm": 0.2,
-      "status": "FAIL",
-      "unit": "mm (diameter)"
+      "cad_size_px": 18.26,
+      "measured_size_px": 19.04,
+      "deviation_px": 0.78
     },
     {
       "feature_name": "hole #12",
       "feature_present": "YES",
-      "cad_size_mm": 2.6,
-      "measured_size_mm": 3.0524,
-      "deviation_mm": 0.4524,
-      "tolerance_mm": 0.1,
-      "status": "FAIL",
-      "unit": "mm (radius)"
+      "cad_size_px": 9.13,
+      "measured_size_px": 10.72,
+      "deviation_px": 1.59
     },
     {
       "feature_name": "hole #12_dia",
       "feature_present": "YES",
-      "cad_size_mm": 5.2,
-      "measured_size_mm": 6.1047,
-      "deviation_mm": 0.9047,
-      "tolerance_mm": 0.2,
-      "status": "FAIL",
-      "unit": "mm (diameter)"
+      "cad_size_px": 18.26,
+      "measured_size_px": 21.44,
+      "deviation_px": 3.18
     },
     {
       "feature_name": "hole #13",
       "feature_present": "YES",
-      "cad_size_mm": 2.6,
-      "measured_size_mm": 2.8474,
-      "deviation_mm": 0.2474,
-      "tolerance_mm": 0.1,
-      "status": "FAIL",
-      "unit": "mm (radius)"
+      "cad_size_px": 9.13,
+      "measured_size_px": 10.0,
+      "deviation_px": 0.87
     },
     {
       "feature_name": "hole #13_dia",
       "feature_present": "YES",
-      "cad_size_mm": 5.2,
-      "measured_size_mm": 5.6947,
-      "deviation_mm": 0.4947,
-      "tolerance_mm": 0.2,
-      "status": "FAIL",
-      "unit": "mm (diameter)"
+      "cad_size_px": 18.26,
+      "measured_size_px": 20.0,
+      "deviation_px": 1.74
     },
     {
       "feature_name": "hole #14",
       "feature_present": "YES",
-      "cad_size_mm": 2.6,
-      "measured_size_mm": 2.6423,
-      "deviation_mm": 0.0423,
-      "tolerance_mm": 0.1,
-      "status": "PASS",
-      "unit": "mm (radius)"
+      "cad_size_px": 9.13,
+      "measured_size_px": 9.28,
+      "deviation_px": 0.15
     },
     {
       "feature_name": "hole #14_dia",
       "feature_present": "YES",
-      "cad_size_mm": 5.2,
-      "measured_size_mm": 5.2847,
-      "deviation_mm": 0.0847,
-      "tolerance_mm": 0.2,
-      "status": "PASS",
-      "unit": "mm (diameter)"
+      "cad_size_px": 18.26,
+      "measured_size_px": 18.56,
+      "deviation_px": 0.3
     },
     {
       "feature_name": "hole #15",
       "feature_present": "YES",
-      "cad_size_mm": 2.6,
-      "measured_size_mm": 2.5398,
-      "deviation_mm": -0.0602,
-      "tolerance_mm": 0.1,
-      "status": "PASS",
-      "unit": "mm (radius)"
+      "cad_size_px": 9.13,
+      "measured_size_px": 8.92,
+      "deviation_px": -0.21
     },
     {
       "feature_name": "hole #15_dia",
       "feature_present": "YES",
-      "cad_size_mm": 5.2,
-      "measured_size_mm": 5.0797,
-      "deviation_mm": -0.1203,
-      "tolerance_mm": 0.2,
-      "status": "PASS",
-      "unit": "mm (diameter)"
+      "cad_size_px": 18.26,
+      "measured_size_px": 17.84,
+      "deviation_px": -0.42
     },
     {
       "feature_name": "hole #16",
       "feature_present": "YES",
-      "cad_size_mm": 2.6,
-      "measured_size_mm": 2.8474,
-      "deviation_mm": 0.2474,
-      "tolerance_mm": 0.1,
-      "status": "FAIL",
-      "unit": "mm (radius)"
+      "cad_size_px": 9.13,
+      "measured_size_px": 10.0,
+      "deviation_px": 0.87
     },
     {
       "feature_name": "hole #16_dia",
       "feature_present": "YES",
-      "cad_size_mm": 5.2,
-      "measured_size_mm": 5.6947,
-      "deviation_mm": 0.4947,
-      "tolerance_mm": 0.2,
-      "status": "FAIL",
-      "unit": "mm (diameter)"
+      "cad_size_px": 18.26,
+      "measured_size_px": 20.0,
+      "deviation_px": 1.74
     },
     {
       "feature_name": "hole #17",
       "feature_present": "YES",
-      "cad_size_mm": 2.6,
-      "measured_size_mm": 2.7448,
-      "deviation_mm": 0.1448,
-      "tolerance_mm": 0.1,
-      "status": "FAIL",
-      "unit": "mm (radius)"
+      "cad_size_px": 9.13,
+      "measured_size_px": 9.64,
+      "deviation_px": 0.51
     },
     {
       "feature_name": "hole #17_dia",
       "feature_present": "YES",
-      "cad_size_mm": 5.2,
-      "measured_size_mm": 5.4897,
-      "deviation_mm": 0.2897,
-      "tolerance_mm": 0.2,
-      "status": "FAIL",
-      "unit": "mm (diameter)"
+      "cad_size_px": 18.26,
+      "measured_size_px": 19.28,
+      "deviation_px": 1.02
     },
     {
       "feature_name": "hole #18",
       "feature_present": "YES",
-      "cad_size_mm": 2.6,
-      "measured_size_mm": 1.6856,
-      "deviation_mm": -0.9144,
-      "tolerance_mm": 0.1,
-      "status": "FAIL",
-      "unit": "mm (radius)"
+      "cad_size_px": 9.13,
+      "measured_size_px": 5.92,
+      "deviation_px": -3.21
     },
     {
       "feature_name": "hole #18_dia",
       "feature_present": "YES",
-      "cad_size_mm": 5.2,
-      "measured_size_mm": 3.3713,
-      "deviation_mm": -1.8287,
-      "tolerance_mm": 0.2,
-      "status": "FAIL",
-      "unit": "mm (diameter)"
+      "cad_size_px": 18.26,
+      "measured_size_px": 11.84,
+      "deviation_px": -6.42
     },
     {
       "feature_name": "center_bore",
       "feature_present": "NO",
-      "cad_size_mm": 29.0,
-      "measured_size_mm": 29.043,
-      "deviation_mm": 0.043,
-      "tolerance_mm": 0.3,
-      "status": "PASS",
-      "unit": "mm"
+      "cad_size_px": 101.85,
+      "measured_size_px": 102.0,
+      "deviation_px": 0.15
     },
     {
       "feature_name": "pcd",
       "feature_present": "NO",
-      "cad_size_mm": 95.3684,
-      "measured_size_mm": 95.4235,
-      "deviation_mm": 0.0551,
-      "tolerance_mm": 0.5,
-      "status": "PASS",
-      "unit": "mm"
+      "cad_size_px": 334.93,
+      "measured_size_px": 335.12,
+      "deviation_px": 0.19
     }
   ]
 }

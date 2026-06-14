@@ -1,6 +1,6 @@
 {
   "report_metadata": {
-    "timestamp": "2026-06-14T12:41:46",
+    "timestamp": "2026-06-15T01:54:03",
     "image": "box_rear",
     "identified_as": "box_rear",
     "alignment_score": 0.9028,
@@ -8,51 +8,37 @@
     "strategy": "ecc_fine",
     "scale_px_per_mm": 5.5246,
     "total_features": 4,
-    "pass_count": 3,
-    "fail_count": 1,
-    "overall_status": "FAIL",
-    "units": "mm"
+    "units": "px",
+    "evaluation": "disabled (pre-clamp prototype)"
   },
   "features": [
     {
       "feature_name": "#1 rect cutout_width",
       "feature_present": "YES",
-      "cad_size_mm": 25.654,
-      "measured_size_mm": 25.8844,
-      "deviation_mm": 0.2304,
-      "tolerance_mm": 0.3,
-      "status": "PASS",
-      "unit": "mm"
+      "cad_size_px": 141.73,
+      "measured_size_px": 143.0,
+      "deviation_px": 1.27
     },
     {
       "feature_name": "#1 rect cutout_height",
       "feature_present": "YES",
-      "cad_size_mm": 25.654,
-      "measured_size_mm": 25.1604,
-      "deviation_mm": -0.4936,
-      "tolerance_mm": 0.3,
-      "status": "FAIL",
-      "unit": "mm"
+      "cad_size_px": 141.73,
+      "measured_size_px": 139.0,
+      "deviation_px": -2.73
     },
     {
       "feature_name": "overall_width",
       "feature_present": "NO",
-      "cad_size_mm": 49.2125,
-      "measured_size_mm": 49.7777,
-      "deviation_mm": 0.5652,
-      "tolerance_mm": 1.0,
-      "status": "PASS",
-      "unit": "mm"
+      "cad_size_px": 271.88,
+      "measured_size_px": 275.0,
+      "deviation_px": 3.12
     },
     {
       "feature_name": "overall_height",
       "feature_present": "NO",
-      "cad_size_mm": 82.55,
-      "measured_size_mm": 81.6355,
-      "deviation_mm": -0.9145,
-      "tolerance_mm": 1.0,
-      "status": "PASS",
-      "unit": "mm"
+      "cad_size_px": 456.05,
+      "measured_size_px": 451.0,
+      "deviation_px": -5.05
     }
   ]
 }

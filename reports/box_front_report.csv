@@ -1,10 +1,10 @@
-feature_name,feature_present,cad_size_mm,measured_size_mm,deviation_mm,tolerance_mm,status,unit
-#1 hole,YES,2.9516,4.9665,2.0149,0.1,FAIL,mm (radius)
-#1 hole_dia,YES,5.9031,9.933,4.0299,0.2,FAIL,mm (diameter)
-#2 hole,YES,2.9516,5.7693,2.8178,0.1,FAIL,mm (radius)
-#2 hole_dia,YES,5.9031,11.5387,5.6355,0.2,FAIL,mm (diameter)
-#3 rect cutout_width,YES,25.654,25.7771,0.1231,0.3,PASS,mm
-#3 rect cutout_height,YES,25.654,26.7609,1.1069,0.3,FAIL,mm
-overall_width,NO,50.0063,48.9961,-1.0102,1.0,FAIL,mm
-overall_height,NO,83.3438,79.6924,-3.6513,1.0,FAIL,mm
-spacing_#1 hole_to_#2 hole,NO,31.6955,32.8693,1.1739,0.3,FAIL,mm
+feature_name,feature_present,cad_size_px,measured_size_px,deviation_px
+#1 hole,YES,15.0,25.24,10.24
+#1 hole_dia,YES,30.0,50.48,20.48
+#2 hole,YES,15.0,29.32,14.32
+#2 hole_dia,YES,30.0,58.64,28.64
+#3 rect cutout_width,YES,130.37,131.0,0.63
+#3 rect cutout_height,YES,130.37,136.0,5.63
+overall_width,NO,254.13,249.0,-5.13
+overall_height,NO,423.56,405.0,-18.56
+spacing_#1 hole_to_#2 hole,NO,161.08,167.04,5.97

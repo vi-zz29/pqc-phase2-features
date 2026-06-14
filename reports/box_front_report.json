@@ -1,6 +1,6 @@
 {
   "report_metadata": {
-    "timestamp": "2026-06-14T12:41:35",
+    "timestamp": "2026-06-15T01:53:59",
     "image": "box_front",
     "identified_as": "box_front",
     "alignment_score": 0.798,
@@ -8,101 +8,72 @@
     "strategy": "ecc_fine",
     "scale_px_per_mm": 5.082,
     "total_features": 9,
-    "pass_count": 1,
-    "fail_count": 8,
-    "overall_status": "FAIL",
-    "units": "mm"
+    "units": "px",
+    "evaluation": "disabled (pre-clamp prototype)"
   },
   "features": [
     {
       "feature_name": "#1 hole",
       "feature_present": "YES",
-      "cad_size_mm": 2.9516,
-      "measured_size_mm": 4.9665,
-      "deviation_mm": 2.0149,
-      "tolerance_mm": 0.1,
-      "status": "FAIL",
-      "unit": "mm (radius)"
+      "cad_size_px": 15.0,
+      "measured_size_px": 25.24,
+      "deviation_px": 10.24
     },
     {
       "feature_name": "#1 hole_dia",
       "feature_present": "YES",
-      "cad_size_mm": 5.9031,
-      "measured_size_mm": 9.933,
-      "deviation_mm": 4.0299,
-      "tolerance_mm": 0.2,
-      "status": "FAIL",
-      "unit": "mm (diameter)"
+      "cad_size_px": 30.0,
+      "measured_size_px": 50.48,
+      "deviation_px": 20.48
     },
     {
       "feature_name": "#2 hole",
       "feature_present": "YES",
-      "cad_size_mm": 2.9516,
-      "measured_size_mm": 5.7693,
-      "deviation_mm": 2.8178,
-      "tolerance_mm": 0.1,
-      "status": "FAIL",
-      "unit": "mm (radius)"
+      "cad_size_px": 15.0,
+      "measured_size_px": 29.32,
+      "deviation_px": 14.32
     },
     {
       "feature_name": "#2 hole_dia",
       "feature_present": "YES",
-      "cad_size_mm": 5.9031,
-      "measured_size_mm": 11.5387,
-      "deviation_mm": 5.6355,
-      "tolerance_mm": 0.2,
-      "status": "FAIL",
-      "unit": "mm (diameter)"
+      "cad_size_px": 30.0,
+      "measured_size_px": 58.64,
+      "deviation_px": 28.64
     },
     {
       "feature_name": "#3 rect cutout_width",
       "feature_present": "YES",
-      "cad_size_mm": 25.654,
-      "measured_size_mm": 25.7771,
-      "deviation_mm": 0.1231,
-      "tolerance_mm": 0.3,
-      "status": "PASS",
-      "unit": "mm"
+      "cad_size_px": 130.37,
+      "measured_size_px": 131.0,
+      "deviation_px": 0.63
     },
     {
       "feature_name": "#3 rect cutout_height",
       "feature_present": "YES",
-      "cad_size_mm": 25.654,
-      "measured_size_mm": 26.7609,
-      "deviation_mm": 1.1069,
-      "tolerance_mm": 0.3,
-      "status": "FAIL",
-      "unit": "mm"
+      "cad_size_px": 130.37,
+      "measured_size_px": 136.0,
+      "deviation_px": 5.63
     },
     {
       "feature_name": "overall_width",
       "feature_present": "NO",
-      "cad_size_mm": 50.0063,
-      "measured_size_mm": 48.9961,
-      "deviation_mm": -1.0102,
-      "tolerance_mm": 1.0,
-      "status": "FAIL",
-      "unit": "mm"
+      "cad_size_px": 254.13,
+      "measured_size_px": 249.0,
+      "deviation_px": -5.13
     },
     {
       "feature_name": "overall_height",
       "feature_present": "NO",
-      "cad_size_mm": 83.3438,
-      "measured_size_mm": 79.6924,
-      "deviation_mm": -3.6513,
-      "tolerance_mm": 1.0,
-      "status": "FAIL",
-      "unit": "mm"
+      "cad_size_px": 423.56,
+      "measured_size_px": 405.0,
+      "deviation_px": -18.56
     },
     {
       "feature_name": "spacing_#1 hole_to_#2 hole",
       "feature_present": "NO",
-      "cad_size_mm": 31.6955,
-      "measured_size_mm": 32.8693,
-      "deviation_mm": 1.1739,
-      "tolerance_mm": 0.3,
-      "status": "FAIL",
-      "unit": "mm"
+      "cad_size_px": 161.08,
+      "measured_size_px": 167.04,
+      "deviation_px": 5.97
     }
   ]
 }

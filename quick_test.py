@@ -630,14 +630,12 @@ def _run_dimension_pipeline(
         logger.debug(traceback.format_exc())
         return
 
-    # ── Stage 7: Tolerance Verification ─────────────────────────────────────
+    # ── Stage 7: Tolerance Verification (passthrough — no PASS/FAIL) ────────
     try:
         tolerance_results = verify_tolerances(measured_features)
-        n_pass = sum(1 for t in tolerance_results if t.status == "PASS")
-        n_fail = sum(1 for t in tolerance_results if t.status == "FAIL")
         PASS(
-            f"Tolerance Verification  "
-            f"({n_pass} PASS  /  {n_fail} FAIL  out of {len(tolerance_results)})"
+            f"Tolerance Passthrough  "
+            f"({len(tolerance_results)} features — no evaluation)"
         )
     except ValueError as exc:
         FAIL("Tolerance Verification", str(exc))
